@@ -34,12 +34,14 @@ const extractList = (payload) => {
  * Extracts a single student from create/update responses:
  *   { success, message, data: student }
  */
+//  Replace current extractStudent with this
 const extractStudent = (payload) => {
-  if (payload?.data && typeof payload.data === 'object' && !Array.isArray(payload.data)) {
-    return payload.data;
-  }
-  if (payload?.student) return payload.student;
-  if (payload?.id)      return payload;   // direct student object
+  // Shape: { success, message, data: { id, ... } }  ← your backend
+  if (payload?.data?.id)      return payload.data;
+  // Shape: { success, data: { students: [...] } }
+  if (payload?.student?.id)   return payload.student;
+  // Direct object
+  if (payload?.id)            return payload;
   return null;
 };
 

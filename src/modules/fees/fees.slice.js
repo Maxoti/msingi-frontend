@@ -2,15 +2,12 @@
  * fees.slice.js
  * Redux state for fee management — invoices, payments, M-Pesa, reports.
  *
- * Fix summary (v2):
- *  - selectCreateInvoice, selectRecordPayment, selectMpesaReconcile,
- *    selectReceiptReconcile are now built with createSelector so they return
- *    a stable reference and never trigger the "returned a different result"
- *    re-render warning.
- *  - selectMpesa is also memoized for the same reason.
- *  - All deprecated object-returning selectors have been replaced.
- *  - fetchAllTerms is imported from terms.slice so CreateInvoiceModal can
- *    populate a real term dropdown instead of a free-text field.
+ * Fix summary (v3):
+ *  - CRITICAL FIX: initiateStkPush now maps data.data.transactionId →
+ *    checkoutRequestId so polling never hits /query/null.
+ *  - pollStkStatus now auto-stops when ResultCode is received (SUCCESS/FAILED).
+ *  - Timer in MpesaModal extended to 120 s to match M-Pesa's actual timeout.
+ *  - All createSelector memoizations retained from v2.
  */
 
 'use strict';
@@ -37,7 +34,6 @@ const errMsg = (err, fallback) =>
    INVOICE THUNKS
    ============================================================ */
 
-/** GET /fees/invoices */
 export const fetchInvoices = createAsyncThunk(
   "fees/fetchInvoices",
   async (filters = {}, { rejectWithValue }) => {
@@ -50,7 +46,6 @@ export const fetchInvoices = createAsyncThunk(
   }
 );
 
-/** GET /fees/invoices/:id */
 export const fetchInvoiceById = createAsyncThunk(
   "fees/fetchInvoiceById",
   async (invoiceId, { rejectWithValue }) => {
@@ -63,7 +58,6 @@ export const fetchInvoiceById = createAsyncThunk(
   }
 );
 
-/** GET /fees/invoices/student/:studentId */
 export const fetchStudentInvoices = createAsyncThunk(
   "fees/fetchStudentInvoices",
   async (studentId, { rejectWithValue }) => {
@@ -76,18 +70,13 @@ export const fetchStudentInvoices = createAsyncThunk(
   }
 );
 
-/** POST /fees/invoices
- *  FIX: student_id and term_id are now coerced to integers here so the
- *  component never has to worry about string vs number.
- *  term_id must be the academic_terms.id PK — NOT the term number (1/2/3).
- */
 export const createInvoice = createAsyncThunk(
   "fees/createInvoice",
   async ({ student_id, term_id, items }, { rejectWithValue }) => {
     try {
       const { data } = await API.post("/fees/invoices", {
         student_id: parseInt(student_id, 10),
-        term_id:    parseInt(term_id,    10),   // ← academic_terms.id PK
+        term_id:    parseInt(term_id,    10),
         items,
       });
       return data.data;
@@ -101,7 +90,6 @@ export const createInvoice = createAsyncThunk(
    PAYMENT THUNKS
    ============================================================ */
 
-/** GET /fees/payments */
 export const fetchPayments = createAsyncThunk(
   "fees/fetchPayments",
   async (filters = {}, { rejectWithValue }) => {
@@ -114,7 +102,6 @@ export const fetchPayments = createAsyncThunk(
   }
 );
 
-/** GET /fees/payments/:id */
 export const fetchPaymentById = createAsyncThunk(
   "fees/fetchPaymentById",
   async (paymentId, { rejectWithValue }) => {
@@ -127,7 +114,6 @@ export const fetchPaymentById = createAsyncThunk(
   }
 );
 
-/** POST /fees/payments */
 export const recordPayment = createAsyncThunk(
   "fees/recordPayment",
   async (paymentData, { rejectWithValue }) => {
@@ -144,7 +130,6 @@ export const recordPayment = createAsyncThunk(
    BALANCE & REPORTS THUNKS
    ============================================================ */
 
-/** GET /fees/balance/:studentId */
 export const fetchStudentBalance = createAsyncThunk(
   "fees/fetchStudentBalance",
   async (studentId, { rejectWithValue }) => {
@@ -157,7 +142,6 @@ export const fetchStudentBalance = createAsyncThunk(
   }
 );
 
-/** GET /fees/fee-structures */
 export const fetchFeeStructures = createAsyncThunk(
   "fees/fetchFeeStructures",
   async (filters = {}, { rejectWithValue }) => {
@@ -170,7 +154,6 @@ export const fetchFeeStructures = createAsyncThunk(
   }
 );
 
-/** POST /fees/fee-structures */
 export const createFeeStructure = createAsyncThunk(
   "fees/createFeeStructure",
   async (structureData, { rejectWithValue }) => {
@@ -183,7 +166,6 @@ export const createFeeStructure = createAsyncThunk(
   }
 );
 
-/** GET /fees/reports/summary */
 export const fetchCollectionSummary = createAsyncThunk(
   "fees/fetchCollectionSummary",
   async (filters = {}, { rejectWithValue }) => {
@@ -196,7 +178,6 @@ export const fetchCollectionSummary = createAsyncThunk(
   }
 );
 
-/** GET /fees/reports/defaulters */
 export const fetchDefaulters = createAsyncThunk(
   "fees/fetchDefaulters",
   async (filters = {}, { rejectWithValue }) => {
@@ -213,15 +194,24 @@ export const fetchDefaulters = createAsyncThunk(
    M-PESA THUNKS
    ============================================================ */
 
-/** POST /mpesa/initiate — STK push by admission number */
+/**
+ * POST /mpesa/initiate — STK push by admission number.
+ *
+ * FIX v3: The Lipana API returns `transactionId` (not `checkoutRequestId`).
+ * We now map data.data.transactionId → checkoutRequestId so the Redux state
+ * always has a real value and polling never calls /query/null.
+ */
 export const initiateStkPush = createAsyncThunk(
   "fees/initiateStkPush",
   async ({ admissionNo, phoneNumber, amount }, { rejectWithValue }) => {
     try {
       const { data } = await API.post("/mpesa/initiate", { admissionNo, phoneNumber, amount });
+      const result = data.data;
       return {
-        checkoutRequestId: data.data.checkoutRequestId,
-        merchantRequestId: data.data.merchantRequestId,
+        // Lipana returns `transactionId`; fall back to checkoutRequestId if
+        // the backend is ever updated to use the standard field name.
+        checkoutRequestId: result.transactionId ?? result.checkoutRequestId ?? null,
+        merchantRequestId: result.merchantRequestId ?? null,
       };
     } catch (err) {
       return rejectWithValue(errMsg(err, "STK push failed"));
@@ -235,9 +225,10 @@ export const initiateStkPushByInvoice = createAsyncThunk(
   async ({ invoice_id, phone_number, amount }, { rejectWithValue }) => {
     try {
       const { data } = await API.post("/mpesa/stk-push", { invoice_id, phone_number, amount });
+      const result = data.data;
       return {
-        checkoutRequestId: data.data.checkoutRequestId,
-        merchantRequestId: data.data.merchantRequestId,
+        checkoutRequestId: result.transactionId ?? result.checkoutRequestId ?? null,
+        merchantRequestId: result.merchantRequestId ?? null,
       };
     } catch (err) {
       return rejectWithValue(errMsg(err, "STK push failed"));
@@ -245,22 +236,38 @@ export const initiateStkPushByInvoice = createAsyncThunk(
   }
 );
 
-/** GET /mpesa/query/:checkoutRequestId */
+/**
+ * GET /mpesa/query/:checkoutRequestId
+ *
+ * FIX v3: Returns a stable { status, resultDesc } shape. The reducer stops
+ * the polling cycle by setting stkStatus to SUCCESS or FAILED; MpesaModal's
+ * useEffect dependency on stkStatus then clears the interval automatically.
+ */
 export const pollStkStatus = createAsyncThunk(
   "fees/pollStkStatus",
   async (checkoutRequestId, { rejectWithValue }) => {
     try {
       const { data } = await API.get(`/mpesa/query/${checkoutRequestId}`);
-      const result   = data.data;
+      const result = data.data;
+
       let status = "PENDING";
-      if      (result?.ResultCode === 0) status = "SUCCESS";
-      else if (result?.ResultCode  >  0) status = "FAILED";
-      return { status, resultDesc: result?.ResultDesc ?? "" };
+
+      // ResultCode check
+      if      (result?.ResultCode === 0)                                   status = "SUCCESS";
+      else if (result?.ResultCode !== undefined && result.ResultCode > 0)  status = "FAILED";
+
+      //  Handle both uppercase (backend) and lowercase (just in case)
+      const s = result?.status?.toUpperCase();
+      if (s === "COMPLETED" || s === "RECONCILED" || s === "SUCCESS")      status = "SUCCESS";
+      if (s === "FAILED"    || s === "CANCELLED")                          status = "FAILED";
+
+      return { status, resultDesc: result?.ResultDesc ?? result?.message ?? "" };
     } catch (err) {
       return rejectWithValue(errMsg(err, "Status check failed"));
     }
   }
 );
+
 
 /** POST /fees/payments — manual M-Pesa cashier entry */
 export const confirmMpesaManual = createAsyncThunk(
@@ -282,7 +289,6 @@ export const confirmMpesaManual = createAsyncThunk(
   }
 );
 
-/** GET /mpesa/transactions */
 export const fetchMpesaTransactions = createAsyncThunk(
   "fees/fetchMpesaTransactions",
   async (filters = {}, { rejectWithValue }) => {
@@ -295,7 +301,6 @@ export const fetchMpesaTransactions = createAsyncThunk(
   }
 );
 
-/** GET /mpesa/transactions/pending */
 export const fetchPendingMpesa = createAsyncThunk(
   "fees/fetchPendingMpesa",
   async ({ limit = 50, offset = 0 } = {}, { rejectWithValue }) => {
@@ -308,7 +313,6 @@ export const fetchPendingMpesa = createAsyncThunk(
   }
 );
 
-/** POST /mpesa/reconcile — auto-reconcile by receipt number */
 export const reconcileByReceipt = createAsyncThunk(
   "fees/reconcileByReceipt",
   async ({ receipt_number }, { rejectWithValue }) => {
@@ -321,7 +325,6 @@ export const reconcileByReceipt = createAsyncThunk(
   }
 );
 
-/** POST /mpesa/reconcile/:transactionId — manual reconcile */
 export const reconcileMpesaTransaction = createAsyncThunk(
   "fees/reconcileMpesaTransaction",
   async ({ transactionId, student_id, invoice_id }, { rejectWithValue }) => {
@@ -339,7 +342,6 @@ export const reconcileMpesaTransaction = createAsyncThunk(
    ============================================================ */
 
 const initialState = {
-  // Invoices
   invoices:               [],
   invoicesPagination:     null,
   invoicesLoading:        false,
@@ -356,7 +358,6 @@ const initialState = {
   createInvoiceError:     null,
   createInvoiceSuccess:   false,
 
-  // Payments
   payments:               [],
   paymentsPagination:     null,
   paymentsLoading:        false,
@@ -368,12 +369,10 @@ const initialState = {
   recordPaymentError:     null,
   recordPaymentSuccess:   false,
 
-  // Balance
   studentBalance:         null,
   studentBalanceLoading:  false,
   studentBalanceError:    null,
 
-  // Fee structures
   feeStructures:          [],
   feeStructuresLoading:   false,
   feeStructuresError:     null,
@@ -381,7 +380,6 @@ const initialState = {
   createStructureLoading: false,
   createStructureError:   null,
 
-  // Reports
   collectionSummary:      null,
   summaryLoading:         false,
   summaryError:           null,
@@ -390,13 +388,12 @@ const initialState = {
   defaultersLoading:      false,
   defaultersError:        null,
 
-  // M-Pesa
   mpesa: {
     stkPushLoading:    false,
     stkPushError:      null,
-    checkoutRequestId: null,
+    checkoutRequestId: null,   // ← set from transactionId after FIX
     merchantRequestId: null,
-    stkStatus:         "IDLE",
+    stkStatus:         "IDLE", // IDLE | PENDING | SUCCESS | FAILED | TIMEOUT
     statusLoading:     false,
     resultDesc:        "",
 
@@ -493,179 +490,90 @@ const feesSlice = createSlice({
 
     // ── Invoices ──────────────────────────────────────────────────────────────
     builder
-      .addCase(fetchInvoices.pending,   (s) => {
-        s.invoicesLoading = true;
-        s.invoicesError   = null;
-      })
+      .addCase(fetchInvoices.pending,   (s) => { s.invoicesLoading = true;  s.invoicesError = null; })
       .addCase(fetchInvoices.fulfilled, (s, { payload }) => {
         s.invoicesLoading    = false;
         s.invoices           = payload.invoices;
         s.invoicesPagination = payload.pagination;
       })
-      .addCase(fetchInvoices.rejected,  (s, { payload }) => {
-        s.invoicesLoading = false;
-        s.invoicesError   = payload;
-      });
+      .addCase(fetchInvoices.rejected,  (s, { payload }) => { s.invoicesLoading = false; s.invoicesError = payload; });
 
     builder
-      .addCase(fetchInvoiceById.pending,   (s) => {
-        s.selectedInvoiceLoading = true;
-        s.selectedInvoiceError   = null;
-      })
-      .addCase(fetchInvoiceById.fulfilled, (s, { payload }) => {
-        s.selectedInvoiceLoading = false;
-        s.selectedInvoice        = payload;
-      })
-      .addCase(fetchInvoiceById.rejected,  (s, { payload }) => {
-        s.selectedInvoiceLoading = false;
-        s.selectedInvoiceError   = payload;
-      });
+      .addCase(fetchInvoiceById.pending,   (s) => { s.selectedInvoiceLoading = true;  s.selectedInvoiceError = null; })
+      .addCase(fetchInvoiceById.fulfilled, (s, { payload }) => { s.selectedInvoiceLoading = false; s.selectedInvoice = payload; })
+      .addCase(fetchInvoiceById.rejected,  (s, { payload }) => { s.selectedInvoiceLoading = false; s.selectedInvoiceError = payload; });
 
     builder
       .addCase(fetchStudentInvoices.pending,   (s) => { s.studentInvoicesLoading = true; })
-      .addCase(fetchStudentInvoices.fulfilled, (s, { payload }) => {
-        s.studentInvoicesLoading = false;
-        s.studentInvoices        = payload;
-      })
+      .addCase(fetchStudentInvoices.fulfilled, (s, { payload }) => { s.studentInvoicesLoading = false; s.studentInvoices = payload; })
       .addCase(fetchStudentInvoices.rejected,  (s) => { s.studentInvoicesLoading = false; });
 
     builder
-      .addCase(createInvoice.pending,   (s) => {
-        s.createInvoiceLoading  = true;
-        s.createInvoiceError    = null;
-        s.createInvoiceSuccess  = false;
-      })
+      .addCase(createInvoice.pending,   (s) => { s.createInvoiceLoading = true;  s.createInvoiceError = null; s.createInvoiceSuccess = false; })
       .addCase(createInvoice.fulfilled, (s, { payload }) => {
-        s.createInvoiceLoading  = false;
-        s.createInvoiceSuccess  = true;
+        s.createInvoiceLoading = false;
+        s.createInvoiceSuccess = true;
         s.invoices = [payload, ...s.invoices];
       })
-      .addCase(createInvoice.rejected,  (s, { payload }) => {
-        s.createInvoiceLoading = false;
-        s.createInvoiceError   = payload;
-      });
+      .addCase(createInvoice.rejected,  (s, { payload }) => { s.createInvoiceLoading = false; s.createInvoiceError = payload; });
 
     // ── Payments ──────────────────────────────────────────────────────────────
     builder
-      .addCase(fetchPayments.pending,   (s) => {
-        s.paymentsLoading = true;
-        s.paymentsError   = null;
-      })
+      .addCase(fetchPayments.pending,   (s) => { s.paymentsLoading = true;  s.paymentsError = null; })
       .addCase(fetchPayments.fulfilled, (s, { payload }) => {
         s.paymentsLoading    = false;
         s.payments           = payload.payments;
         s.paymentsPagination = payload.pagination;
       })
-      .addCase(fetchPayments.rejected,  (s, { payload }) => {
-        s.paymentsLoading = false;
-        s.paymentsError   = payload;
-      });
+      .addCase(fetchPayments.rejected,  (s, { payload }) => { s.paymentsLoading = false; s.paymentsError = payload; });
 
     builder
-      .addCase(fetchPaymentById.fulfilled, (s, { payload }) => {
-        s.selectedPayment = payload;
-      });
+      .addCase(fetchPaymentById.fulfilled, (s, { payload }) => { s.selectedPayment = payload; });
 
     builder
-      .addCase(recordPayment.pending,   (s) => {
-        s.recordPaymentLoading  = true;
-        s.recordPaymentError    = null;
-        s.recordPaymentSuccess  = false;
-      })
+      .addCase(recordPayment.pending,   (s) => { s.recordPaymentLoading = true;  s.recordPaymentError = null; s.recordPaymentSuccess = false; })
       .addCase(recordPayment.fulfilled, (s, { payload }) => {
         s.recordPaymentLoading = false;
         s.recordPaymentSuccess = true;
         s.payments = [payload, ...s.payments];
         s.invoices = s.invoices.map((inv) =>
           inv.id === payload.invoice_id
-            ? {
-                ...inv,
-                paid_amount: (
-                  parseFloat(inv.paid_amount || 0) + parseFloat(payload.amount)
-                ).toFixed(2),
-              }
+            ? { ...inv, paid_amount: (parseFloat(inv.paid_amount || 0) + parseFloat(payload.amount)).toFixed(2) }
             : inv
         );
       })
-      .addCase(recordPayment.rejected,  (s, { payload }) => {
-        s.recordPaymentLoading = false;
-        s.recordPaymentError   = payload;
-      });
+      .addCase(recordPayment.rejected,  (s, { payload }) => { s.recordPaymentLoading = false; s.recordPaymentError = payload; });
 
     // ── Balance ───────────────────────────────────────────────────────────────
     builder
-      .addCase(fetchStudentBalance.pending,   (s) => {
-        s.studentBalanceLoading = true;
-        s.studentBalanceError   = null;
-      })
-      .addCase(fetchStudentBalance.fulfilled, (s, { payload }) => {
-        s.studentBalanceLoading = false;
-        s.studentBalance        = payload;
-      })
-      .addCase(fetchStudentBalance.rejected,  (s, { payload }) => {
-        s.studentBalanceLoading = false;
-        s.studentBalanceError   = payload;
-      });
+      .addCase(fetchStudentBalance.pending,   (s) => { s.studentBalanceLoading = true;  s.studentBalanceError = null; })
+      .addCase(fetchStudentBalance.fulfilled, (s, { payload }) => { s.studentBalanceLoading = false; s.studentBalance = payload; })
+      .addCase(fetchStudentBalance.rejected,  (s, { payload }) => { s.studentBalanceLoading = false; s.studentBalanceError = payload; });
 
     // ── Fee Structures ────────────────────────────────────────────────────────
     builder
-      .addCase(fetchFeeStructures.pending,   (s) => {
-        s.feeStructuresLoading = true;
-        s.feeStructuresError   = null;
-      })
-      .addCase(fetchFeeStructures.fulfilled, (s, { payload }) => {
-        s.feeStructuresLoading = false;
-        s.feeStructures        = payload;
-      })
-      .addCase(fetchFeeStructures.rejected,  (s, { payload }) => {
-        s.feeStructuresLoading = false;
-        s.feeStructuresError   = payload;
-      });
+      .addCase(fetchFeeStructures.pending,   (s) => { s.feeStructuresLoading = true;  s.feeStructuresError = null; })
+      .addCase(fetchFeeStructures.fulfilled, (s, { payload }) => { s.feeStructuresLoading = false; s.feeStructures = payload; })
+      .addCase(fetchFeeStructures.rejected,  (s, { payload }) => { s.feeStructuresLoading = false; s.feeStructuresError = payload; });
 
     builder
-      .addCase(createFeeStructure.pending,   (s) => {
-        s.createStructureLoading = true;
-        s.createStructureError   = null;
-      })
-      .addCase(createFeeStructure.fulfilled, (s, { payload }) => {
-        s.createStructureLoading = false;
-        s.feeStructures          = [...s.feeStructures, payload];
-      })
-      .addCase(createFeeStructure.rejected,  (s, { payload }) => {
-        s.createStructureLoading = false;
-        s.createStructureError   = payload;
-      });
+      .addCase(createFeeStructure.pending,   (s) => { s.createStructureLoading = true;  s.createStructureError = null; })
+      .addCase(createFeeStructure.fulfilled, (s, { payload }) => { s.createStructureLoading = false; s.feeStructures = [...s.feeStructures, payload]; })
+      .addCase(createFeeStructure.rejected,  (s, { payload }) => { s.createStructureLoading = false; s.createStructureError = payload; });
 
     // ── Reports ───────────────────────────────────────────────────────────────
     builder
-      .addCase(fetchCollectionSummary.pending,   (s) => {
-        s.summaryLoading = true;
-        s.summaryError   = null;
-      })
-      .addCase(fetchCollectionSummary.fulfilled, (s, { payload }) => {
-        s.summaryLoading    = false;
-        s.collectionSummary = payload;
-      })
-      .addCase(fetchCollectionSummary.rejected,  (s, { payload }) => {
-        s.summaryLoading = false;
-        s.summaryError   = payload;
-      });
+      .addCase(fetchCollectionSummary.pending,   (s) => { s.summaryLoading = true;  s.summaryError = null; })
+      .addCase(fetchCollectionSummary.fulfilled, (s, { payload }) => { s.summaryLoading = false; s.collectionSummary = payload; })
+      .addCase(fetchCollectionSummary.rejected,  (s, { payload }) => { s.summaryLoading = false; s.summaryError = payload; });
 
     builder
-      .addCase(fetchDefaulters.pending,   (s) => {
-        s.defaultersLoading = true;
-        s.defaultersError   = null;
-      })
-      .addCase(fetchDefaulters.fulfilled, (s, { payload }) => {
-        s.defaultersLoading = false;
-        s.defaulters        = payload;
-      })
-      .addCase(fetchDefaulters.rejected,  (s, { payload }) => {
-        s.defaultersLoading = false;
-        s.defaultersError   = payload;
-      });
+      .addCase(fetchDefaulters.pending,   (s) => { s.defaultersLoading = true;  s.defaultersError = null; })
+      .addCase(fetchDefaulters.fulfilled, (s, { payload }) => { s.defaultersLoading = false; s.defaulters = payload; })
+      .addCase(fetchDefaulters.rejected,  (s, { payload }) => { s.defaultersLoading = false; s.defaultersError = payload; });
 
     // ── M-Pesa: STK push ──────────────────────────────────────────────────────
+    // FIX v3: checkoutRequestId now correctly populated from transactionId
     [initiateStkPush, initiateStkPushByInvoice].forEach((thunk) => {
       builder
         .addCase(thunk.pending,   (s) => {
@@ -677,7 +585,7 @@ const feesSlice = createSlice({
         .addCase(thunk.fulfilled, (s, { payload }) => {
           s.mpesa.stkPushLoading    = false;
           s.mpesa.stkStatus         = "PENDING";
-          s.mpesa.checkoutRequestId = payload.checkoutRequestId;
+          s.mpesa.checkoutRequestId = payload.checkoutRequestId; // ← now a real value
           s.mpesa.merchantRequestId = payload.merchantRequestId;
         })
         .addCase(thunk.rejected,  (s, { payload }) => {
@@ -688,21 +596,21 @@ const feesSlice = createSlice({
     });
 
     // ── M-Pesa: polling ───────────────────────────────────────────────────────
+    // FIX v3: when status is SUCCESS or FAILED the reducer updates stkStatus,
+    // which is a dependency of MpesaModal's polling useEffect — so the interval
+    // is cleared automatically without any extra logic in the component.
     builder
       .addCase(pollStkStatus.pending,   (s) => { s.mpesa.statusLoading = true; })
       .addCase(pollStkStatus.fulfilled, (s, { payload }) => {
         s.mpesa.statusLoading = false;
-        s.mpesa.stkStatus     = payload.status;
+        s.mpesa.stkStatus     = payload.status;     // SUCCESS/FAILED stops the poll
         s.mpesa.resultDesc    = payload.resultDesc;
       })
       .addCase(pollStkStatus.rejected,  (s) => { s.mpesa.statusLoading = false; });
 
     // ── M-Pesa: manual cashier entry ──────────────────────────────────────────
     builder
-      .addCase(confirmMpesaManual.pending,   (s) => {
-        s.mpesa.manualLoading = true;
-        s.mpesa.manualError   = null;
-      })
+      .addCase(confirmMpesaManual.pending,   (s) => { s.mpesa.manualLoading = true;  s.mpesa.manualError = null; })
       .addCase(confirmMpesaManual.fulfilled, (s, { payload }) => {
         s.mpesa.manualLoading = false;
         s.mpesa.stkStatus     = "SUCCESS";
@@ -710,86 +618,44 @@ const feesSlice = createSlice({
         s.payments = [payload, ...s.payments];
         s.invoices = s.invoices.map((inv) =>
           inv.id === payload.invoice_id
-            ? {
-                ...inv,
-                paid_amount: (
-                  parseFloat(inv.paid_amount || 0) + parseFloat(payload.amount)
-                ).toFixed(2),
-              }
+            ? { ...inv, paid_amount: (parseFloat(inv.paid_amount || 0) + parseFloat(payload.amount)).toFixed(2) }
             : inv
         );
       })
-      .addCase(confirmMpesaManual.rejected, (s, { payload }) => {
-        s.mpesa.manualLoading = false;
-        s.mpesa.manualError   = payload;
-      });
+      .addCase(confirmMpesaManual.rejected, (s, { payload }) => { s.mpesa.manualLoading = false; s.mpesa.manualError = payload; });
 
     // ── M-Pesa: transactions list ─────────────────────────────────────────────
     builder
-      .addCase(fetchMpesaTransactions.pending,   (s) => {
-        s.mpesa.transactionsLoading = true;
-        s.mpesa.transactionsError   = null;
-      })
+      .addCase(fetchMpesaTransactions.pending,   (s) => { s.mpesa.transactionsLoading = true;  s.mpesa.transactionsError = null; })
       .addCase(fetchMpesaTransactions.fulfilled, (s, { payload }) => {
         s.mpesa.transactionsLoading    = false;
         s.mpesa.transactions           = payload.transactions;
         s.mpesa.transactionsPagination = payload.pagination;
       })
-      .addCase(fetchMpesaTransactions.rejected,  (s, { payload }) => {
-        s.mpesa.transactionsLoading = false;
-        s.mpesa.transactionsError   = payload;
-      });
+      .addCase(fetchMpesaTransactions.rejected,  (s, { payload }) => { s.mpesa.transactionsLoading = false; s.mpesa.transactionsError = payload; });
 
     // ── M-Pesa: pending / unmatched ───────────────────────────────────────────
     builder
-      .addCase(fetchPendingMpesa.pending,   (s) => {
-        s.mpesa.pendingLoading = true;
-        s.mpesa.pendingError   = null;
-      })
-      .addCase(fetchPendingMpesa.fulfilled, (s, { payload }) => {
-        s.mpesa.pendingLoading      = false;
-        s.mpesa.pendingTransactions = payload;
-      })
-      .addCase(fetchPendingMpesa.rejected,  (s, { payload }) => {
-        s.mpesa.pendingLoading = false;
-        s.mpesa.pendingError   = payload;
-      });
+      .addCase(fetchPendingMpesa.pending,   (s) => { s.mpesa.pendingLoading = true;  s.mpesa.pendingError = null; })
+      .addCase(fetchPendingMpesa.fulfilled, (s, { payload }) => { s.mpesa.pendingLoading = false; s.mpesa.pendingTransactions = payload; })
+      .addCase(fetchPendingMpesa.rejected,  (s, { payload }) => { s.mpesa.pendingLoading = false; s.mpesa.pendingError = payload; });
 
     // ── M-Pesa: receipt auto-reconcile ────────────────────────────────────────
     builder
-      .addCase(reconcileByReceipt.pending,   (s) => {
-        s.mpesa.receiptReconcileLoading = true;
-        s.mpesa.receiptReconcileError   = null;
-        s.mpesa.receiptReconcileSuccess = false;
-      })
-      .addCase(reconcileByReceipt.fulfilled, (s) => {
-        s.mpesa.receiptReconcileLoading = false;
-        s.mpesa.receiptReconcileSuccess = true;
-      })
-      .addCase(reconcileByReceipt.rejected,  (s, { payload }) => {
-        s.mpesa.receiptReconcileLoading = false;
-        s.mpesa.receiptReconcileError   = payload;
-      });
+      .addCase(reconcileByReceipt.pending,   (s) => { s.mpesa.receiptReconcileLoading = true;  s.mpesa.receiptReconcileError = null; s.mpesa.receiptReconcileSuccess = false; })
+      .addCase(reconcileByReceipt.fulfilled, (s) => { s.mpesa.receiptReconcileLoading = false; s.mpesa.receiptReconcileSuccess = true; })
+      .addCase(reconcileByReceipt.rejected,  (s, { payload }) => { s.mpesa.receiptReconcileLoading = false; s.mpesa.receiptReconcileError = payload; });
 
     // ── M-Pesa: manual reconcile ──────────────────────────────────────────────
     builder
-      .addCase(reconcileMpesaTransaction.pending,   (s) => {
-        s.mpesa.reconcileLoading  = true;
-        s.mpesa.reconcileError    = null;
-        s.mpesa.reconcileSuccess  = false;
-      })
+      .addCase(reconcileMpesaTransaction.pending,   (s) => { s.mpesa.reconcileLoading = true;  s.mpesa.reconcileError = null; s.mpesa.reconcileSuccess = false; })
       .addCase(reconcileMpesaTransaction.fulfilled, (s, { payload }) => {
         s.mpesa.reconcileLoading          = false;
         s.mpesa.reconcileSuccess          = true;
         s.mpesa.lastReconciledTransaction = payload;
-        s.mpesa.pendingTransactions = s.mpesa.pendingTransactions.filter(
-          (t) => t.id !== payload.transactionId
-        );
+        s.mpesa.pendingTransactions = s.mpesa.pendingTransactions.filter((t) => t.id !== payload.transactionId);
       })
-      .addCase(reconcileMpesaTransaction.rejected, (s, { payload }) => {
-        s.mpesa.reconcileLoading = false;
-        s.mpesa.reconcileError   = payload;
-      });
+      .addCase(reconcileMpesaTransaction.rejected, (s, { payload }) => { s.mpesa.reconcileLoading = false; s.mpesa.reconcileError = payload; });
   },
 });
 
@@ -811,12 +677,8 @@ export const {
 
 /* ============================================================
    SELECTORS
-   All object-returning selectors are now built with createSelector
-   so they return a stable memoized reference and never trigger
-   the "Selector returned a different result" React re-render warning.
    ============================================================ */
 
-// ── Invoices — scalar ─────────────────────────────────────────────────────────
 export const selectInvoices           = (s) => s.fees.invoices;
 export const selectInvoicesPagination = (s) => s.fees.invoicesPagination;
 export const selectInvoicesLoading    = (s) => s.fees.invoicesLoading;
@@ -828,15 +690,11 @@ export const selectCreateInvoiceLoading = (s) => s.fees.createInvoiceLoading;
 export const selectCreateInvoiceError   = (s) => s.fees.createInvoiceError;
 export const selectCreateInvoiceSuccess = (s) => s.fees.createInvoiceSuccess;
 
-// ── createInvoice — memoized object (FIX: was returning new object every render)
 export const selectCreateInvoice = createSelector(
-  selectCreateInvoiceLoading,
-  selectCreateInvoiceError,
-  selectCreateInvoiceSuccess,
+  selectCreateInvoiceLoading, selectCreateInvoiceError, selectCreateInvoiceSuccess,
   (loading, error, success) => ({ loading, error, success })
 );
 
-// ── Payments — scalar ─────────────────────────────────────────────────────────
 export const selectPayments           = (s) => s.fees.payments;
 export const selectPaymentsPagination = (s) => s.fees.paymentsPagination;
 export const selectPaymentsLoading    = (s) => s.fees.paymentsLoading;
@@ -847,25 +705,19 @@ export const selectRecordPaymentLoading = (s) => s.fees.recordPaymentLoading;
 export const selectRecordPaymentError   = (s) => s.fees.recordPaymentError;
 export const selectRecordPaymentSuccess = (s) => s.fees.recordPaymentSuccess;
 
-// ── recordPayment — memoized object (FIX)
 export const selectRecordPayment = createSelector(
-  selectRecordPaymentLoading,
-  selectRecordPaymentError,
-  selectRecordPaymentSuccess,
+  selectRecordPaymentLoading, selectRecordPaymentError, selectRecordPaymentSuccess,
   (loading, error, success) => ({ loading, error, success })
 );
 
-// ── Balance ───────────────────────────────────────────────────────────────────
 export const selectStudentBalance        = (s) => s.fees.studentBalance;
 export const selectStudentBalanceLoading = (s) => s.fees.studentBalanceLoading;
 export const selectStudentBalanceError   = (s) => s.fees.studentBalanceError;
 
-// ── Fee Structures ────────────────────────────────────────────────────────────
 export const selectFeeStructures        = (s) => s.fees.feeStructures;
 export const selectFeeStructuresLoading = (s) => s.fees.feeStructuresLoading;
 export const selectFeeStructuresError   = (s) => s.fees.feeStructuresError;
 
-// ── Reports ───────────────────────────────────────────────────────────────────
 export const selectCollectionSummary = (s) => s.fees.collectionSummary;
 export const selectSummaryLoading    = (s) => s.fees.summaryLoading;
 export const selectSummaryError      = (s) => s.fees.summaryError;
@@ -874,7 +726,6 @@ export const selectDefaulters        = (s) => s.fees.defaulters;
 export const selectDefaultersLoading = (s) => s.fees.defaultersLoading;
 export const selectDefaultersError   = (s) => s.fees.defaultersError;
 
-// ── M-Pesa — scalar ───────────────────────────────────────────────────────────
 export const selectMpesaPending        = (s) => s.fees.mpesa.pendingTransactions;
 export const selectMpesaPendingLoading = (s) => s.fees.mpesa.pendingLoading;
 export const selectMpesaPendingError   = (s) => s.fees.mpesa.pendingError;
@@ -891,30 +742,22 @@ export const selectReceiptReconcileLoading = (s) => s.fees.mpesa.receiptReconcil
 export const selectReceiptReconcileError   = (s) => s.fees.mpesa.receiptReconcileError;
 export const selectReceiptReconcileSuccess = (s) => s.fees.mpesa.receiptReconcileSuccess;
 
-// ── M-Pesa — memoized objects (FIX: all previously returned new object each render)
-
-// selectMpesa: MpesaModal needs the whole sub-tree. Memoized via sub-selector.
 export const selectMpesa = createSelector(
   (s) => s.fees.mpesa,
   (mpesa) => mpesa
 );
 
 export const selectMpesaReconcile = createSelector(
-  selectMpesaReconcileLoading,
-  selectMpesaReconcileError,
-  selectMpesaReconcileSuccess,
+  selectMpesaReconcileLoading, selectMpesaReconcileError, selectMpesaReconcileSuccess,
   (s) => s.fees.mpesa.lastReconciledTransaction,
   (loading, error, success, last) => ({ loading, error, success, last })
 );
 
 export const selectReceiptReconcile = createSelector(
-  selectReceiptReconcileLoading,
-  selectReceiptReconcileError,
-  selectReceiptReconcileSuccess,
+  selectReceiptReconcileLoading, selectReceiptReconcileError, selectReceiptReconcileSuccess,
   (loading, error, success) => ({ loading, error, success })
 );
 
-// ── Active term ───────────────────────────────────────────────────────────────
 export const selectActiveTerm = (s) => s.fees.activeTerm;
 
 /* ============================================================

@@ -216,7 +216,6 @@ export default function StudentProfile({ studentId, onClose, onEdit }) {
                     <label style={s.smallLabel}>Relationship</label>
                     <select style={s.smallInput} value={parentForm.relationship}
                       onChange={e => setParentForm(f => ({ ...f, relationship: e.target.value }))}>
-                        // AFTER (only what DB allows)
 {['MOTHER', 'FATHER', 'GUARDIAN'].map(r => <option key={r}>{r}</option>)}
                     </select>
                   </div>

@@ -652,7 +652,7 @@ export default function ClassesPage() {
           </div>
         ) : classes.length === 0 ? (
           <div style={{ textAlign:'center', padding:'80px 0', color:'#94a3b8' }}>
-            <div style={{ fontSize:48, marginBottom:12 }}>🏫</div>
+            <div style={{ fontSize:48, marginBottom:12 }}></div>
             <h3 style={{ margin:'0 0 8px', fontSize:18, fontWeight:700, color:'#cbd5e1' }}>
               No classes found
             </h3>

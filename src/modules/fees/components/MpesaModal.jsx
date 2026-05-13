@@ -1,131 +1,331 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import {
   initiateStkPush, pollStkStatus, confirmMpesaManual,
-  resetMpesa, setMpesaTimeout, selectMpesa,
+  resetMpesa, setMpesaTimeout, selectMpesa, fetchPayments,
 } from "../fees.slice";
 import { C } from "./constants";
 import { Modal, Inp, Btn, Alert, Spinner } from "./primitives";
 
+// How long (seconds) to wait before declaring a timeout.
+// M-Pesa STK requests expire after ~2 minutes on Safaricom's side.
+const STK_TIMEOUT_SECONDS = 120;
+
+// How often to poll (ms)
+const POLL_INTERVAL_MS = 5000;
+
 export const MpesaModal = ({ invoice, onClose }) => {
   const dispatch = useDispatch();
   const mpesa    = useSelector(selectMpesa);
+
   const [phone,  setPhone]  = useState("");
   const [amount, setAmount] = useState(String(invoice?.balance || invoice?.total_amount || ""));
   const [manRef, setManRef] = useState("");
   const [manAmt, setManAmt] = useState(String(invoice?.balance || ""));
-  const [timer,  setTimer]  = useState(90);
-  const timerRef = useRef(null);
+  const [timer,  setTimer]  = useState(STK_TIMEOUT_SECONDS);
 
+  const timerRef = useRef(null);
+  const pollRef  = useRef(null);
+
+  // ── Clear both intervals ──────────────────────────────────────────────────
+  const clearAll = useCallback(() => {
+    clearInterval(timerRef.current);
+    clearInterval(pollRef.current);
+  }, []);
+
+  // ── Countdown timer — runs only while PENDING ─────────────────────────────
   useEffect(() => {
-    if (mpesa.stkStatus !== "PENDING") return;
+    if (mpesa.stkStatus !== "PENDING") {
+      clearInterval(timerRef.current);
+      return;
+    }
+    setTimer(STK_TIMEOUT_SECONDS);
     timerRef.current = setInterval(() => {
-      setTimer(p => {
-        if (p <= 1) { clearInterval(timerRef.current); dispatch(setMpesaTimeout()); return 0; }
-        return p - 1;
+      setTimer((prev) => {
+        if (prev <= 1) {
+          clearInterval(timerRef.current);
+          dispatch(setMpesaTimeout());
+          return 0;
+        }
+        return prev - 1;
       });
     }, 1000);
     return () => clearInterval(timerRef.current);
-  }, [mpesa.stkStatus]);
+  }, [mpesa.stkStatus, dispatch]);
 
+  // ── Polling — runs only while PENDING and checkoutRequestId is set ────────
+  // FIX v3: checkoutRequestId is now a real transactionId value (not null),
+  // so this interval actually fires useful requests.
+  // The interval self-destructs when stkStatus leaves PENDING because that
+  // field is listed as a dependency — React will re-run this effect and the
+  // cleanup function will call clearInterval.
   useEffect(() => {
-    if (mpesa.stkStatus !== "PENDING" || !mpesa.checkoutRequestId) return;
-    const poll = setInterval(() => dispatch(pollStkStatus(mpesa.checkoutRequestId)), 5000);
-    return () => clearInterval(poll);
-  }, [mpesa.stkStatus, mpesa.checkoutRequestId]);
+    if (mpesa.stkStatus !== "PENDING" || !mpesa.checkoutRequestId) {
+      clearInterval(pollRef.current);
+      return;
+    }
 
-  const handleClose = () => { dispatch(resetMpesa()); clearInterval(timerRef.current); onClose(); };
+    // Fire one poll immediately so we don't wait 5 s for the first check
+    dispatch(pollStkStatus(mpesa.checkoutRequestId));
 
+    pollRef.current = setInterval(() => {
+      dispatch(pollStkStatus(mpesa.checkoutRequestId));
+    }, POLL_INTERVAL_MS);
+
+    return () => clearInterval(pollRef.current);
+  }, [mpesa.stkStatus, mpesa.checkoutRequestId, dispatch]);
+
+  // ── On SUCCESS — refresh the payments list so the table updates ───────────
+  useEffect(() => {
+    if (mpesa.stkStatus === "SUCCESS") {
+      clearAll();
+      dispatch(fetchPayments({ page: 1, limit: 15 }));
+    }
+  }, [mpesa.stkStatus, dispatch, clearAll]);
+
+  const handleClose = useCallback(() => {
+    clearAll();
+    dispatch(resetMpesa());
+    onClose();
+  }, [clearAll, dispatch, onClose]);
+
+  // ── SUCCESS screen ────────────────────────────────────────────────────────
   if (mpesa.stkStatus === "SUCCESS") return (
     <Modal title="Payment Confirmed" onClose={handleClose}>
       <div style={{ textAlign: "center", padding: "32px 0" }}>
-        <div style={{ width: 72, height: 72, borderRadius: "50%", background: C.emeraldDim, border: `2px solid ${C.emerald}40`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 32, margin: "0 auto 20px" }}>✅</div>
+        <div style={{
+          width: 72, height: 72, borderRadius: "50%",
+          background: C.emeraldDim, border: `2px solid ${C.emerald}40`,
+          display: "flex", alignItems: "center", justifyContent: "center",
+          fontSize: 32, margin: "0 auto 20px",
+        }}>✅</div>
         <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 8 }}>Payment Recorded</div>
-        <div style={{ color: C.muted, fontSize: 13.5, marginBottom: 28 }}>M-Pesa transaction confirmed successfully.</div>
+        <div style={{ color: C.muted, fontSize: 13.5, marginBottom: 28 }}>
+          M-Pesa transaction confirmed successfully.
+        </div>
         <Btn variant="success" onClick={handleClose} style={{ margin: "0 auto" }}>Done</Btn>
       </div>
     </Modal>
   );
 
+  // ── PENDING screen ────────────────────────────────────────────────────────
   if (mpesa.stkStatus === "PENDING") return (
-    <Modal title="Waiting for M-Pesa PIN" subtitle={`STK push sent to ${phone}`} onClose={handleClose}>
+    <Modal
+      title="Waiting for M-Pesa PIN"
+      subtitle={`STK push sent to ${phone}`}
+      onClose={handleClose}
+    >
       <div style={{ textAlign: "center", padding: "20px 0" }}>
-        <div style={{ width: 80, height: 80, borderRadius: "50%", background: C.emeraldDim, border: `3px solid ${C.emerald}`, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 20px", fontSize: 34, animation: "fm-pulse 1.4s ease infinite" }}>📱</div>
+        <div style={{
+          width: 80, height: 80, borderRadius: "50%",
+          background: C.emeraldDim, border: `3px solid ${C.emerald}`,
+          display: "flex", alignItems: "center", justifyContent: "center",
+          margin: "0 auto 20px", fontSize: 34,
+          animation: "fm-pulse 1.4s ease infinite",
+        }}>📱</div>
         <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 6 }}>Enter M-Pesa PIN</div>
-        <div style={{ color: C.muted, fontSize: 13, marginBottom: 22 }}>Check your phone and authorize the payment</div>
-        <div style={{ fontSize: 44, fontWeight: 700, marginBottom: 24, color: timer < 20 ? C.rose : C.emerald, fontFamily: "'DM Mono', monospace" }}>{timer}s</div>
+        <div style={{ color: C.muted, fontSize: 13, marginBottom: 22 }}>
+          Check your phone and authorize the payment
+        </div>
+        <div style={{
+          fontSize: 44, fontWeight: 700, marginBottom: 8,
+          color: timer < 30 ? C.rose : C.emerald,
+          fontFamily: "'DM Mono', monospace",
+        }}>
+          {timer}s
+        </div>
+        {/* Show the transaction reference so the user can confirm on their phone */}
+        {mpesa.checkoutRequestId && (
+          <div style={{ color: C.muted, fontSize: 11, marginBottom: 20, fontFamily: "monospace" }}>
+            Ref: {mpesa.checkoutRequestId}
+          </div>
+        )}
         <div style={{ display: "flex", gap: 10, justifyContent: "center" }}>
-          <Btn variant="outline" onClick={() => { clearInterval(timerRef.current); dispatch(setMpesaTimeout()); }}>Enter Code Manually</Btn>
+          <Btn
+            variant="outline"
+            onClick={() => { clearAll(); dispatch(setMpesaTimeout()); }}
+          >
+            Enter Code Manually
+          </Btn>
           <Btn variant="danger" onClick={handleClose}>Cancel</Btn>
         </div>
       </div>
     </Modal>
   );
 
+  // ── TIMEOUT screen ────────────────────────────────────────────────────────
   if (mpesa.stkStatus === "TIMEOUT") return (
-    <Modal title="Enter M-Pesa Code Manually" subtitle="STK Push timed out — pay via Paybill then enter code" onClose={handleClose}>
+    <Modal
+      title="Enter M-Pesa Code Manually"
+      subtitle="STK Push timed out — pay via Paybill then enter code"
+      onClose={handleClose}
+    >
       <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-        <div style={{ background: "#F8FAFC", borderRadius: 10, padding: 16, border: `1px solid ${C.border}` }}>
-          <div style={{ fontSize: 11, fontWeight: 600, color: C.muted, textTransform: "uppercase", letterSpacing: .6, marginBottom: 10 }}>Paybill Details</div>
+        <div style={{
+          background: "#F8FAFC", borderRadius: 10, padding: 16,
+          border: `1px solid ${C.border}`,
+        }}>
+          <div style={{
+            fontSize: 11, fontWeight: 600, color: C.muted,
+            textTransform: "uppercase", letterSpacing: .6, marginBottom: 10,
+          }}>
+            Paybill Details
+          </div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, fontSize: 13 }}>
             <div><span style={{ color: C.muted }}>Business No: </span><b>522522</b></div>
-            <div><span style={{ color: C.muted }}>Account: </span><b style={{ color: C.indigo }}>{invoice?.invoice_no || `INV-${invoice?.id}`}</b></div>
+            <div>
+              <span style={{ color: C.muted }}>Account: </span>
+              <b style={{ color: C.indigo }}>{invoice?.invoice_no || `INV-${invoice?.id}`}</b>
+            </div>
           </div>
         </div>
-        <Inp label="M-Pesa Confirmation Code" placeholder="e.g. QKF5TXXX" value={manRef} onChange={e => setManRef(e.target.value.toUpperCase())} />
-        <Inp label="Amount (KES)" type="number" value={manAmt} onChange={e => setManAmt(e.target.value)} />
+        <Inp
+          label="M-Pesa Confirmation Code"
+          placeholder="e.g. QKF5TXXX"
+          value={manRef}
+          onChange={(e) => setManRef(e.target.value.toUpperCase())}
+        />
+        <Inp
+          label="Amount (KES)"
+          type="number"
+          value={manAmt}
+          onChange={(e) => setManAmt(e.target.value)}
+        />
         {mpesa.manualError && <Alert type="error" msg={mpesa.manualError} />}
         <div style={{ display: "flex", gap: 10 }}>
-          <Btn variant="outline" onClick={() => dispatch(resetMpesa())} style={{ flex: 1 }}>Back</Btn>
-          <Btn variant="mpesa" loading={mpesa.manualLoading} style={{ flex: 2 }}
-            onClick={() => { if (manRef && manAmt) dispatch(confirmMpesaManual({ invoice_id: invoice.id, amount: parseFloat(manAmt), reference_number: manRef, payment_date: new Date().toISOString().split("T")[0], received_by: "Cashier" })); }}>
-             Confirm Payment
+          <Btn variant="outline" onClick={() => dispatch(resetMpesa())} style={{ flex: 1 }}>
+            Back
+          </Btn>
+          <Btn
+            variant="mpesa"
+            loading={mpesa.manualLoading}
+            style={{ flex: 2 }}
+            onClick={() => {
+              if (manRef && manAmt) {
+                dispatch(confirmMpesaManual({
+                  invoice_id:       invoice.id,
+                  amount:           parseFloat(manAmt),
+                  reference_number: manRef,
+                  payment_date:     new Date().toISOString().split("T")[0],
+                  received_by:      "Cashier",
+                }));
+              }
+            }}
+          >
+            Confirm Payment
           </Btn>
         </div>
       </div>
     </Modal>
   );
 
+  // ── FAILED screen ─────────────────────────────────────────────────────────
   if (mpesa.stkStatus === "FAILED") return (
     <Modal title="Payment Failed" onClose={handleClose}>
       <div style={{ textAlign: "center", padding: "28px 0" }}>
-        <div style={{ width: 68, height: 68, borderRadius: "50%", background: C.roseDim, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 30, margin: "0 auto 16px" }}>❌</div>
-        <div style={{ fontSize: 16, fontWeight: 700, color: C.rose, marginBottom: 8 }}>Payment Failed</div>
-        <div style={{ color: C.muted, fontSize: 13, marginBottom: 28 }}>{mpesa.stkPushError || mpesa.resultDesc || "Customer cancelled or request timed out."}</div>
+        <div style={{
+          width: 68, height: 68, borderRadius: "50%",
+          background: C.roseDim,
+          display: "flex", alignItems: "center", justifyContent: "center",
+          fontSize: 30, margin: "0 auto 16px",
+        }}>❌</div>
+        <div style={{ fontSize: 16, fontWeight: 700, color: C.rose, marginBottom: 8 }}>
+          Payment Failed
+        </div>
+        <div style={{ color: C.muted, fontSize: 13, marginBottom: 28 }}>
+          {mpesa.stkPushError || mpesa.resultDesc || "Customer cancelled or request timed out."}
+        </div>
         <div style={{ display: "flex", gap: 10, justifyContent: "center" }}>
           <Btn variant="outline" onClick={() => dispatch(resetMpesa())}>Try Again</Btn>
-          <Btn variant="amber" onClick={() => dispatch(setMpesaTimeout())}>Enter Manually</Btn>
+          <Btn variant="amber"   onClick={() => dispatch(setMpesaTimeout())}>Enter Manually</Btn>
         </div>
       </div>
     </Modal>
   );
 
+  // ── IDLE / initial screen ─────────────────────────────────────────────────
   return (
-    <Modal title="Pay via M-Pesa" subtitle={`Invoice ${invoice?.invoice_no || `#${invoice?.id}`}`} onClose={handleClose}>
+    <Modal
+      title="Pay via M-Pesa"
+      subtitle={`Invoice ${invoice?.invoice_no || `#${invoice?.id}`}`}
+      onClose={handleClose}
+    >
       <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-        <div style={{ background: C.emeraldDim, border: `1px solid ${C.emerald}30`, borderRadius: 12, padding: "18px 20px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        {/* Balance banner */}
+        <div style={{
+          background: C.emeraldDim,
+          border: `1px solid ${C.emerald}30`,
+          borderRadius: 12, padding: "18px 20px",
+          display: "flex", justifyContent: "space-between", alignItems: "center",
+        }}>
           <div>
-            <div style={{ fontSize: 11, fontWeight: 600, color: C.emerald, textTransform: "uppercase", letterSpacing: .5, marginBottom: 4 }}>Balance Due</div>
-            <div style={{ fontSize: 26, fontWeight: 700, color: C.emerald, fontFamily: "'DM Mono', monospace" }}>
+            <div style={{
+              fontSize: 11, fontWeight: 600, color: C.emerald,
+              textTransform: "uppercase", letterSpacing: .5, marginBottom: 4,
+            }}>
+              Balance Due
+            </div>
+            <div style={{
+              fontSize: 26, fontWeight: 700, color: C.emerald,
+              fontFamily: "'DM Mono', monospace",
+            }}>
               KES {parseFloat(invoice?.balance || invoice?.total_amount || 0).toLocaleString("en-KE")}
             </div>
           </div>
           <div style={{ fontSize: 36 }}></div>
         </div>
-        <Inp label="Customer Phone (Safaricom)" placeholder="254712345678" value={phone} onChange={e => setPhone(e.target.value)} />
-        <Inp label="Amount to Pay (KES)" type="number" value={amount} onChange={e => setAmount(e.target.value)} />
+
+        <Inp
+          label="Customer Phone (Safaricom)"
+          placeholder="254712345678"
+          value={phone}
+          onChange={(e) => setPhone(e.target.value)}
+        />
+        <Inp
+          label="Amount to Pay (KES)"
+          type="number"
+          value={amount}
+          onChange={(e) => setAmount(e.target.value)}
+        />
+
         {mpesa.stkPushError && <Alert type="error" msg={mpesa.stkPushError} />}
-        <div style={{ background: "#F8FAFC", borderRadius: 9, padding: "11px 14px", fontSize: 12.5, color: C.muted, lineHeight: 1.6 }}>
-          An STK push notification will be sent to <b style={{ color: C.ink }}>{phone || "the phone number above"}</b>.
+
+        <div style={{
+          background: "#F8FAFC", borderRadius: 9, padding: "11px 14px",
+          fontSize: 12.5, color: C.muted, lineHeight: 1.6,
+        }}>
+          An STK push notification will be sent to{" "}
+          <b style={{ color: C.ink }}>{phone || "the phone number above"}</b>.
         </div>
+
         <div style={{ display: "flex", gap: 10 }}>
           <Btn variant="outline" onClick={handleClose} style={{ flex: 1 }}>Cancel</Btn>
-          <Btn variant="mpesa" loading={mpesa.stkPushLoading} style={{ flex: 2 }}
-            onClick={() => { if (phone && amount) dispatch(initiateStkPush({ admissionNo: invoice.admission_no, phoneNumber: phone, amount: parseFloat(amount) })); }}>
-             Send STK Push
+          <Btn
+            variant="mpesa"
+            loading={mpesa.stkPushLoading}
+            style={{ flex: 2 }}
+            onClick={() => {
+              if (phone && amount) {
+                dispatch(initiateStkPush({
+                  admissionNo:  invoice.admission_no,
+                  phoneNumber:  phone,
+                  amount:       parseFloat(amount),
+                }));
+              }
+            }}
+          >
+            Send STK Push
           </Btn>
         </div>
-        <button onClick={() => dispatch(setMpesaTimeout())} style={{ background: "none", border: "none", color: C.muted, fontSize: 12, cursor: "pointer", textDecoration: "underline" }}>
+
+        <button
+          onClick={() => dispatch(setMpesaTimeout())}
+          style={{
+            background: "none", border: "none",
+            color: C.muted, fontSize: 12,
+            cursor: "pointer", textDecoration: "underline",
+          }}
+        >
           Enter M-Pesa code manually instead
         </button>
       </div>

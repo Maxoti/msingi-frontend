@@ -205,35 +205,51 @@ birthCertificateNo: student.birthCertificateNo || student.birthCertificateNumber
   };
 
   // ── Submit ────────────────────────────────────────────────────
-  const handleSubmit = async () => {
-    const errors = validate();
-    if (errors.length > 0) {
-      if (errors.some(e => e === 'Class' || e === 'Admission Date')) setTab('school');
-      setLocalError(`Please fill in: ${errors.join(', ')}`);
-      return;
-    }
+ const handleSubmit = async () => {
+  const errors = validate();
+  if (errors.length > 0) {
+    if (errors.some(e => e === 'Class' || e === 'Admission Date')) setTab('school');
+    setLocalError(`Please fill in: ${errors.join(', ')}`);
+    return;
+  }
 
-    setLocalError('');
-    const action = isEdit
-      ? await dispatch(updateStudentThunk({ id: student.id, data: form }))
-      : await dispatch(createStudentThunk(form));
+  setLocalError('');
+  const action = isEdit
+    ? await dispatch(updateStudentThunk({ id: student.id, data: form }))
+    : await dispatch(createStudentThunk(form));
 
-    if (action.meta.requestStatus !== 'fulfilled') return;
+  if (action.meta.requestStatus !== 'fulfilled') return;
 
-    const savedStudent = action.payload?.student || action.payload;
-    const studentId    = savedStudent?.id || student?.id;
+  //  Fix: match your backend shape { success, message, data: student }
+  const payload   = action.payload;
+  const savedStudent =
+    payload?.data?.id       ? payload.data          // { success, data: { id, ... } }
+    : payload?.student?.id  ? payload.student        // { student: { id, ... } }
+    : payload?.id           ? payload                // direct student object
+    : student;                                       // fallback to prop (edit mode)
 
-    // Save parents
-    const filledParents = parents.filter(p => p.name && p.phone);
+  const studentId = savedStudent?.id ?? student?.id;
+
+  if (!studentId) {
+    console.error('[StudentForm] Could not resolve studentId. Payload:', payload);
+    setLocalError('Student saved but could not link parent contacts. Please edit the student to retry.');
+    onSaved?.(savedStudent);
+    onClose();
+    return;
+  }
+
+  // Save parents
+  const filledParents = parents.filter(p => p.name && p.phone);
+  if (filledParents.length > 0) {
     try {
       await Promise.all(filledParents.map(p => {
         const payload = {
           relationship: p.relationship,
           name:         p.name,
           phone:        p.phone,
-          email:        p.email       || null,
-          idNumber:     p.idNumber    || null,
-          occupation:   p.occupation  || null,
+          email:        p.email      || null,
+          idNumber:     p.idNumber   || null,
+          occupation:   p.occupation || null,
           isPrimary:    p.isPrimary,
         };
         return isEdit && p.id
@@ -243,17 +259,20 @@ birthCertificateNo: student.birthCertificateNo || student.birthCertificateNumber
     } catch (err) {
       console.error('Failed to save parent contacts:', err);
       setLocalError('Student saved but parent contacts failed. Please edit the student to retry.');
+      onSaved?.(savedStudent);
+      onClose();
       return;
     }
+  }
 
-    onSaved?.(savedStudent);
-    onClose();
-  };
+  onSaved?.(savedStudent);
+  onClose();
+};
 
   const displayError = localError || saveError;
 
   return (
-    <Modal onClose={onClose} title={isEdit ? '✏️ Edit Student' : '➕ Add New Student'}>
+    <Modal onClose={onClose} title={isEdit ? ' Edit Student' : '➕ Add New Student'}>
 
       <div style={s.tabs}>
         {TABS.map(t => (
@@ -345,7 +364,7 @@ birthCertificateNo: student.birthCertificateNo || student.birthCertificateNumber
                 {classes.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
               {classes.length === 0 && !classesLoading &&
-                <p style={s.hint}>⚠️ No classes found. Please create classes first.</p>}
+                <p style={s.hint}> No classes found. Please create classes first.</p>}
             </div>
             <Field label="Admission Date *" value={form.admissionDate} onChange={set('admissionDate')} type="date" />
             <Select label="Status"          value={form.status}        onChange={set('status')}        options={STATUSES} />
