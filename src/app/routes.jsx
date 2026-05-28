@@ -10,7 +10,7 @@ import StaffPage from '../modules/staff/StaffPage'
  import ClassesPage from '../modules/classes/classesPage'
  import SubjectsPage from '../modules/subjects/subjectPage'
 import AttendancePage from '../modules/attendance/attendancePage'
-import ExamsPage from '../modules/exams/examPage'
+import ExamsPage from '../modules/exams/ExamPage'
 import FeesPage from '../modules/fees/feesPage'
 import Academictermspage from '../modules/academicTerms/Academictermspage'
 import SchoolOnboarding from '../modules/school/SchoolOnboarding';
