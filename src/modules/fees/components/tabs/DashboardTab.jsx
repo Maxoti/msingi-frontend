@@ -21,9 +21,9 @@ export const DashboardTab = ({ activeTerm }) => {
   const billed    = parseFloat(summary?.total_billed    || 0);
 
   const methodCfg = {
-    MPESA: { color: C.emerald, bg: C.emeraldDim, icon: "💚" },
-    BANK:  { color: C.sky,     bg: C.skyDim,     icon: "🏦" },
-    CASH:  { color: C.amber,   bg: C.amberDim,   icon: "💵" },
+    MPESA: { color: C.emerald, bg: C.emeraldDim,  },
+    BANK:  { color: C.sky,     bg: C.skyDim,     },
+    CASH:  { color: C.amber,   bg: C.amberDim,   },
   };
 
   const stats = summary ? [
@@ -74,7 +74,7 @@ export const DashboardTab = ({ activeTerm }) => {
           </div>
           <div style={{ padding: "18px 20px", display: "flex", flexDirection: "column", gap: 18 }}>
             {summary?.by_method?.map(m => {
-              const cfg = methodCfg[m.method] || { color: C.indigo, icon: "💳" };
+              const cfg = methodCfg[m.method] || { color: C.indigo,  };
               return (
                 <div key={m.method}>
                   <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, marginBottom: 7, fontWeight: 500 }}>
