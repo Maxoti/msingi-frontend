@@ -11,7 +11,7 @@ import StaffPage from '../modules/staff/StaffPage'
  import SubjectsPage from '../modules/subjects/subjectPage'
 import AttendancePage from '../modules/attendance/attendancePage'
 import ExamsPage from '../modules/exams/ExamPage'
-import FeesPage from '../modules/fees/feesPage'
+import FeesPage from '../modules/fees/FeesPage'
 import Academictermspage from '../modules/academicTerms/Academictermspage'
 import SchoolOnboarding from '../modules/school/SchoolOnboarding';
 import TimetablePage from '../modules/timetable/TimetablePage'
