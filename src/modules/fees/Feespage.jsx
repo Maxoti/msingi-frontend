@@ -25,11 +25,7 @@ export default function FeesPage() {
   const dispatch     = useDispatch();
   const activeTerm   = useSelector(selectActiveTerm);
   const terms        = useSelector(selectAllTerms);
-
-  // ── FIX: selectTermsLoading returns an object { list, single, active, ... }
-  // Reading only the 'list' flag gives us the boolean we need for the spinner.
   const termsLoading = useSelector((s) => s.academicTerms.loading.list);
-
   const [tab, setTab] = useState("dashboard");
 
   useEffect(() => {
@@ -54,33 +50,45 @@ export default function FeesPage() {
         style={{
           background: C.surface,
           borderBottom: `1px solid ${C.border}`,
-          padding: "0 28px",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          gap: 16,
-          height: 54,
           boxShadow: "0 1px 3px rgba(15,23,42,.06)",
           position: "sticky",
           top: 0,
           zIndex: 50,
         }}
       >
-        {/* Tab navigation */}
-        <nav style={{ display: "flex", gap: 4 }}>
-          {TABS.map((t) => (
-            <button
-              key={t.id}
-              className={`fm tab-btn ${tab === t.id ? "active" : ""}`}
-              onClick={() => setTab(t.id)}
-            >
-              {t.label}
-            </button>
-          ))}
-        </nav>
+        {/* Tab navigation — horizontally scrollable on mobile */}
+        <div style={{ overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
+          <nav
+            style={{
+              display: "flex",
+              gap: 4,
+              padding: "0 16px",
+              minWidth: "max-content",
+            }}
+          >
+            {TABS.map((t) => (
+              <button
+                key={t.id}
+                className={`fm tab-btn ${tab === t.id ? "active" : ""}`}
+                onClick={() => setTab(t.id)}
+                style={{ whiteSpace: "nowrap" }}
+              >
+                {t.label}
+              </button>
+            ))}
+          </nav>
+        </div>
 
         {/* Term selector */}
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+            padding: "8px 16px",
+            borderTop: `1px solid ${C.border}`,
+          }}
+        >
           <label
             style={{
               fontSize: 11,
@@ -114,7 +122,7 @@ export default function FeesPage() {
                 outline: "none",
                 cursor: "pointer",
                 fontFamily: "'Sora', sans-serif",
-                minWidth: 160,
+                width: "100%",
               }}
             >
               <option value="">All Terms</option>
@@ -129,8 +137,8 @@ export default function FeesPage() {
       </div>
 
       {/* ── Page body ── */}
-      <div style={{ padding: "28px 28px" }}>
-        <div style={{ marginBottom: 22 }}>
+      <div style={{ padding: "20px 16px" }}>
+        <div style={{ marginBottom: 18 }}>
           <h1
             style={{
               fontSize: 21,
