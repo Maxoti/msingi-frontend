@@ -14,10 +14,11 @@ import Modal  from '../../shared/components/Modal';
 import Button from '../../shared/components/Button';
 import api from '../../config/api';
 
+// ─── Constants ───────────────────────────────────────────────────────────────
+
 const DAYS     = { 1: 'MON', 2: 'TUE', 3: 'WED', 4: 'THU', 5: 'FRI' };
 const DAY_KEYS = [1, 2, 3, 4, 5];
 
-// ── Detects non-teaching slots: break, lunch, recess, games
 const isBreakSlot = (name) => /(break|lunch|recess|games)/i.test(name);
 
 const SUBJECT_COLORS = {
@@ -40,13 +41,13 @@ const FALLBACK_COLORS = [
 
 const getCardColor = (subjectName) => {
   const lower = subjectName.toLowerCase();
-  if (lower.includes('math'))                                                         return SUBJECT_COLORS.mathematics;
-  if (lower.includes('english'))                                                      return SUBJECT_COLORS.english;
-  if (lower.includes('kiswahili') || lower.includes('swahili'))                      return SUBJECT_COLORS.kiswahili;
-  if (lower.includes('science'))                                                      return SUBJECT_COLORS.science;
-  if (lower.includes('social'))                                                       return SUBJECT_COLORS.social;
-  if (lower.includes('creative') || lower.includes('art'))                           return SUBJECT_COLORS.creative;
-  if (lower.includes('agricult'))                                                     return SUBJECT_COLORS.agriculture;
+  if (lower.includes('math'))                                                              return SUBJECT_COLORS.mathematics;
+  if (lower.includes('english'))                                                           return SUBJECT_COLORS.english;
+  if (lower.includes('kiswahili') || lower.includes('swahili'))                           return SUBJECT_COLORS.kiswahili;
+  if (lower.includes('science'))                                                           return SUBJECT_COLORS.science;
+  if (lower.includes('social'))                                                            return SUBJECT_COLORS.social;
+  if (lower.includes('creative') || lower.includes('art'))                                return SUBJECT_COLORS.creative;
+  if (lower.includes('agricult'))                                                          return SUBJECT_COLORS.agriculture;
   if (lower.includes('religion') || lower.includes('r.e') || lower.includes('c.r.e') || lower.includes('i.r.e')) return SUBJECT_COLORS.religious;
   let hash = 0;
   for (let i = 0; i < subjectName.length; i++) hash = subjectName.charCodeAt(i) + ((hash << 5) - hash);
@@ -55,6 +56,21 @@ const getCardColor = (subjectName) => {
 
 const emptySlotForm  = { name: '', start_time: '', end_time: '', sort_order: '' };
 const emptyEntryForm = { class_id: '', staff_id: '', slot_id: '', day_of_week: '', subject_name: '', term_id: '' };
+
+// ─── Responsive hook ─────────────────────────────────────────────────────────
+
+function useIsMobile(breakpoint = 640) {
+  const [isMobile, setIsMobile] = useState(() => window.innerWidth < breakpoint);
+  useEffect(() => {
+    const mq = window.matchMedia(`(max-width: ${breakpoint - 1}px)`);
+    const handler = (e) => setIsMobile(e.matches);
+    mq.addEventListener('change', handler);
+    return () => mq.removeEventListener('change', handler);
+  }, [breakpoint]);
+  return isMobile;
+}
+
+// ─── Component ───────────────────────────────────────────────────────────────
 
 export default function TimetablePage() {
   const dispatch  = useDispatch();
@@ -66,6 +82,7 @@ export default function TimetablePage() {
   const saveError = useSelector(selectSaveError);
   const error     = useSelector(selectError);
   const staffList = useReduxSelector(selectStaffList);
+  const isMobile  = useIsMobile();
 
   const [view,            setView]            = useState('class');
   const [classes,         setClasses]         = useState([]);
@@ -79,6 +96,8 @@ export default function TimetablePage() {
   const [slotForm,      setSlotForm]      = useState(emptySlotForm);
   const [entryForm,     setEntryForm]     = useState(emptyEntryForm);
   const [localError,    setLocalError]    = useState('');
+
+  // ── Data fetching ──────────────────────────────────────────────────────────
 
   useEffect(() => {
     dispatch(fetchSlotsThunk());
@@ -108,6 +127,8 @@ export default function TimetablePage() {
       dispatch(fetchTeacherTimetableThunk({ staffId: selectedTeacher, termId: selectedTerm }));
   };
 
+  // ── Handlers ───────────────────────────────────────────────────────────────
+
   const handleCreateSlot = async () => {
     if (!slotForm.name || !slotForm.start_time || !slotForm.end_time) {
       setLocalError('Name, start time and end time are required'); return;
@@ -123,9 +144,9 @@ export default function TimetablePage() {
     setEntryForm({
       ...emptyEntryForm,
       day_of_week: String(dayOfWeek),
-      slot_id: String(slotId),
-      term_id: selectedTerm,
-      class_id: view === 'class' ? selectedClass : '',
+      slot_id:     String(slotId),
+      term_id:     selectedTerm,
+      class_id:    view === 'class' ? selectedClass : '',
     });
     setLocalError('');
     dispatch(clearSaveError());
@@ -153,6 +174,8 @@ export default function TimetablePage() {
   const setE = (field) => (e) => { setEntryForm(f => ({ ...f, [field]: e.target.value })); setLocalError(''); };
   const setS = (field) => (e) => { setSlotForm(f => ({ ...f, [field]: e.target.value })); setLocalError(''); };
 
+  // ── Derived values ─────────────────────────────────────────────────────────
+
   const hasGrid        = slotDefs.length > 0;
   const teachableSlots = slots.filter(sl => !isBreakSlot(sl.name));
 
@@ -160,50 +183,79 @@ export default function TimetablePage() {
   const selectedTermLabel = terms.find(t => String(t.id) === String(selectedTerm));
   const termLabel = selectedTermLabel ? `Term ${selectedTermLabel.term} — ${selectedTermLabel.year}` : '';
 
+  // ── Responsive styles (computed once per render based on isMobile) ─────────
+  const r = responsive(isMobile);
+
+  // ── Render ─────────────────────────────────────────────────────────────────
+
   return (
-    <div style={s.page}>
+    <div style={r.page}>
 
       {/* ── Page header ── */}
-      <div style={s.header}>
-        <div>
+      <div style={r.header}>
+        <div style={r.headerText}>
           <h1 style={s.title}>Timetable</h1>
           <p style={s.subtitle}>Manage weekly class and teacher schedules</p>
         </div>
-        <div style={{ display: 'flex', gap: 8 }}>
-          <Button variant="outline" onClick={() => { setShowSlotForm(true); setSlotForm(emptySlotForm); setLocalError(''); }}>
+        <div style={r.headerActions}>
+          <Button
+            variant="outline"
+            style={isMobile ? s.btnFullWidth : {}}
+            onClick={() => { setShowSlotForm(true); setSlotForm(emptySlotForm); setLocalError(''); }}
+          >
             + Add Time Slot
           </Button>
-          <Button onClick={() => openEntryForm()}>+ Add Entry</Button>
+          <Button
+            style={isMobile ? s.btnFullWidth : {}}
+            onClick={() => openEntryForm()}
+          >
+            + Add Entry
+          </Button>
         </div>
       </div>
 
       {/* ── Toolbar ── */}
-      <div style={s.toolbar}>
-        <div style={s.segmented}>
+      <div style={r.toolbar}>
+        {/* Segmented control */}
+        <div style={r.segmented}>
           {[['class', 'Class View'], ['teacher', 'Teacher View']].map(([val, label]) => (
-            <button key={val} onClick={() => setView(val)}
-              style={{ ...s.segment, ...(view === val ? s.segmentActive : {}) }}>
+            <button
+              key={val}
+              onClick={() => setView(val)}
+              style={{ ...r.segment, ...(view === val ? s.segmentActive : {}) }}
+            >
               {label}
             </button>
           ))}
         </div>
 
-        {view === 'class' ? (
-          <select style={s.select} value={selectedClass} onChange={e => setSelectedClass(e.target.value)}>
-            <option value="">Select class...</option>
-            {classes.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-          </select>
-        ) : (
-          <select style={s.select} value={selectedTeacher} onChange={e => setSelectedTeacher(e.target.value)}>
-            <option value="">Select teacher...</option>
-            {staffList.map(st => <option key={st.id} value={st.id}>{st.firstName || st.first_name} {st.lastName || st.last_name}</option>)}
-          </select>
-        )}
+        {/* Selects row — stacks on mobile */}
+        <div style={r.selectRow}>
+          {view === 'class' ? (
+            <select style={r.select} value={selectedClass} onChange={e => setSelectedClass(e.target.value)}>
+              <option value="">Select class...</option>
+              {classes.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+          ) : (
+            <select style={r.select} value={selectedTeacher} onChange={e => setSelectedTeacher(e.target.value)}>
+              <option value="">Select teacher...</option>
+              {staffList.map(st => (
+                <option key={st.id} value={st.id}>
+                  {st.firstName || st.first_name} {st.lastName || st.last_name}
+                </option>
+              ))}
+            </select>
+          )}
 
-        <select style={s.select} value={selectedTerm} onChange={e => setSelectedTerm(e.target.value)}>
-          <option value="">Select term...</option>
-          {terms.map(t => <option key={t.id} value={t.id}>{t.year} Term {t.term}{t.is_active ? ' (active)' : ''}</option>)}
-        </select>
+          <select style={r.select} value={selectedTerm} onChange={e => setSelectedTerm(e.target.value)}>
+            <option value="">Select term...</option>
+            {terms.map(t => (
+              <option key={t.id} value={t.id}>
+                {t.year} Term {t.term}{t.is_active ? ' (active)' : ''}
+              </option>
+            ))}
+          </select>
+        </div>
       </div>
 
       {error && <div style={s.errorBanner}>⚠️ {error}</div>}
@@ -212,13 +264,15 @@ export default function TimetablePage() {
       {loading ? (
         <div style={s.empty}>Loading timetable...</div>
       ) : !selectedTerm || (view === 'class' && !selectedClass) || (view === 'teacher' && !selectedTeacher) ? (
-        <div style={s.empty}>Select a {view === 'class' ? 'class' : 'teacher'} and term to view the timetable.</div>
+        <div style={s.empty}>
+          Select a {view === 'class' ? 'class' : 'teacher'} and term to view the timetable.
+        </div>
       ) : (
         <div style={s.card}>
 
           {/* Title bar */}
-          <div style={s.titleBar}>
-            <div style={s.ttTitle}>
+          <div style={r.titleBar}>
+            <div style={r.ttTitle}>
               {selectedClassName
                 ? `${selectedClassName.toUpperCase()} CLASS TIMETABLE`
                 : 'CLASS TIMETABLE'}
@@ -229,22 +283,27 @@ export default function TimetablePage() {
           </div>
 
           {/* Color legend */}
-          <div style={s.legend}>
+          <div style={r.legend}>
             {Object.entries(SUBJECT_COLORS).map(([key, col]) => (
               <div key={key} style={s.legendItem}>
                 <div style={{ ...s.legendDot, background: col.bg }} />
                 <span style={s.legendLabel}>
-                  {{ mathematics: 'Mathematics', english: 'English', kiswahili: 'Kiswahili', science: 'Science', social: 'Social Studies', creative: 'Creative Arts', agriculture: 'Agriculture', religious: 'Religious Ed.' }[key]}
+                  {{
+                    mathematics: 'Mathematics', english: 'English',
+                    kiswahili: 'Kiswahili',    science: 'Science',
+                    social: 'Social Studies',  creative: 'Creative Arts',
+                    agriculture: 'Agriculture', religious: 'Religious Ed.',
+                  }[key]}
                 </span>
               </div>
             ))}
           </div>
 
-          {/* Grid — days as rows, slots as columns */}
+          {/* Grid */}
           {!hasGrid ? (
             <div style={s.empty}>No entries yet. Click "+ Add Entry" to get started.</div>
           ) : (
-            <div style={{ overflowX: 'auto' }}>
+            <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
               <table style={s.table}>
                 <thead>
                   <tr>
@@ -252,7 +311,14 @@ export default function TimetablePage() {
                     {slotDefs.map(slot => {
                       const isBreak = isBreakSlot(slot.name);
                       return (
-                        <th key={slot.id} style={{ ...s.th, ...(isBreak ? s.breakTh : {}), ...(isBreak ? s.breakThNarrow : {}) }}>
+                        <th
+                          key={slot.id}
+                          style={{
+                            ...s.th,
+                            ...(isBreak ? s.breakTh : {}),
+                            ...(isBreak ? s.breakThNarrow : {}),
+                          }}
+                        >
                           <div style={s.slotName}>{slot.name}</div>
                           {!isBreak && (
                             <>
@@ -269,10 +335,8 @@ export default function TimetablePage() {
                   {DAY_KEYS.map(day => (
                     <tr key={day}>
                       <td style={s.dayCell}>{DAYS[day]}</td>
-
                       {slotDefs.map(slot => {
                         const isBreak = isBreakSlot(slot.name);
-
                         if (isBreak) {
                           return (
                             <td key={slot.id} style={s.breakBodyCell}>
@@ -280,7 +344,6 @@ export default function TimetablePage() {
                             </td>
                           );
                         }
-
                         const entry = grid[day]?.slots?.[slot.id];
                         const color = entry ? getCardColor(entry.subject_name) : null;
                         return (
@@ -316,7 +379,7 @@ export default function TimetablePage() {
           )}
 
           {/* Footer */}
-          <div style={s.footer}>
+          <div style={r.footer}>
             <span style={s.footerLabel}>CLASS TEACHER: ___________________________</span>
             <span style={s.footerLabel}>SIGNATURE: ___________________________</span>
           </div>
@@ -330,7 +393,10 @@ export default function TimetablePage() {
           {slots.length === 0 ? (
             <span style={{ color: '#aaa', fontSize: 13 }}>No time slots defined yet.</span>
           ) : slots.map(sl => (
-            <div key={sl.id} style={{ ...s.slotPill, ...(isBreakSlot(sl.name) ? s.slotPillBreak : {}) }}>
+            <div
+              key={sl.id}
+              style={{ ...s.slotPill, ...(isBreakSlot(sl.name) ? s.slotPillBreak : {}) }}
+            >
               <span>{sl.name}</span>
               <span style={s.slotPillTime}>{sl.start_time?.slice(0, 5)}–{sl.end_time?.slice(0, 5)}</span>
               <button style={s.slotDeleteBtn} onClick={() => handleDeleteSlot(sl.id)}>✕</button>
@@ -345,7 +411,7 @@ export default function TimetablePage() {
           <div style={s.modalBody}>
             {localError && <div style={s.formError}>{localError}</div>}
             <p style={s.hint}>Tip: name it "Break", "Lunch", or "Games" to mark it as a non-teaching period.</p>
-            <div style={s.grid2}>
+            <div style={r.grid2}>
               <div>
                 <label style={s.label}>Name *</label>
                 <input style={s.input} value={slotForm.name} onChange={setS('name')} placeholder="e.g. Period 1, Break, Games" />
@@ -378,7 +444,7 @@ export default function TimetablePage() {
         <Modal onClose={() => setShowEntryForm(false)} title="Add Timetable Entry">
           <div style={s.modalBody}>
             {(localError || saveError) && <div style={s.formError}>{localError || saveError}</div>}
-            <div style={s.grid2}>
+            <div style={r.grid2}>
               <div>
                 <label style={s.label}>Class *</label>
                 <select style={s.input} value={entryForm.class_id} onChange={setE('class_id')}>
@@ -390,7 +456,11 @@ export default function TimetablePage() {
                 <label style={s.label}>Teacher</label>
                 <select style={s.input} value={entryForm.staff_id} onChange={setE('staff_id')}>
                   <option value="">Select teacher...</option>
-                  {staffList.map(st => <option key={st.id} value={st.id}>{st.firstName || st.first_name} {st.lastName || st.last_name}</option>)}
+                  {staffList.map(st => (
+                    <option key={st.id} value={st.id}>
+                      {st.firstName || st.first_name} {st.lastName || st.last_name}
+                    </option>
+                  ))}
                 </select>
               </div>
               <div>
@@ -446,63 +516,51 @@ export default function TimetablePage() {
   );
 }
 
+// ─── Static styles (never change with viewport) ───────────────────────────────
+
 const s = {
-  page:     { padding: '24px 28px', fontFamily: 'inherit' },
-  header:   { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 },
+  // Typography
   title:    { fontSize: 24, fontWeight: 700, color: '#1a1a2e', margin: 0 },
   subtitle: { fontSize: 13, color: '#888', margin: '4px 0 0' },
 
-  toolbar:  { display: 'flex', gap: 12, marginBottom: 20, flexWrap: 'wrap', alignItems: 'center' },
-  segmented:{ display: 'flex', border: '1.5px solid #e8e8e8', borderRadius: 8, overflow: 'hidden' },
-  segment:  { padding: '8px 16px', background: '#fff', border: 'none', cursor: 'pointer', fontSize: 13, color: '#888', transition: 'all 0.15s' },
+  // Segment active state
   segmentActive: { background: '#6c63ff', color: '#fff', fontWeight: 600 },
-  select:   { padding: '10px 14px', border: '1.5px solid #e8e8e8', borderRadius: 8, fontSize: 14, outline: 'none', color: '#1a1a2e', background: '#fff', minWidth: 180 },
 
+  // Feedback
   errorBanner: { background: '#fff0f0', border: '1px solid #ffcdd2', borderRadius: 8, padding: '10px 14px', color: '#c0392b', fontSize: 13, marginBottom: 16 },
-  empty:    { textAlign: 'center', padding: '60px 24px', color: '#aaa', fontSize: 14 },
+  empty:       { textAlign: 'center', padding: '60px 24px', color: '#aaa', fontSize: 14 },
 
-  // Timetable card
-  card:     { background: '#fff', border: '2px solid #1a1a2e', borderRadius: 12, overflow: 'hidden', marginBottom: 24 },
+  // Timetable card shell
+  card: { background: '#fff', border: '2px solid #1a1a2e', borderRadius: 12, overflow: 'hidden', marginBottom: 24 },
 
-  titleBar: { background: '#1a1a2e', padding: '14px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
-  ttTitle:  { fontSize: 18, fontWeight: 800, color: '#fff', letterSpacing: '0.06em' },
   ttMeta:   { fontSize: 13, color: '#aab4c8' },
 
-  legend:     { display: 'flex', flexWrap: 'wrap', gap: 10, padding: '10px 16px', borderBottom: '1px solid #eee', background: '#fafafa' },
+  // Legend
   legendItem: { display: 'flex', alignItems: 'center', gap: 5 },
   legendDot:  { width: 10, height: 10, borderRadius: 3, flexShrink: 0 },
   legendLabel:{ fontSize: 10, color: '#444', fontWeight: 500 },
 
+  // Table
   table:    { width: '100%', borderCollapse: 'collapse', fontSize: 11 },
-
-  // Header cells
   th:       { padding: '6px 4px', textAlign: 'center', fontWeight: 700, fontSize: 10, color: '#333', background: '#f0f0f0', border: '1px solid #ddd', whiteSpace: 'nowrap', minWidth: 72 },
   dayTh:    { minWidth: 46, background: '#1a1a2e', color: '#fff' },
   breakTh:  { background: '#fff9e6', color: '#b8860b' },
-  // ── Narrow break columns so they don't dominate the layout
   breakThNarrow: { minWidth: 38, width: 38, maxWidth: 52 },
-
   slotName: { fontWeight: 700, fontSize: 10 },
   slotTime: { fontSize: 9, color: '#666', lineHeight: 1.2 },
-
-  // Day label cells
   dayCell:  { background: '#1a1a2e', color: '#fff', fontWeight: 800, fontSize: 12, textAlign: 'center', padding: '0 8px', border: '1px solid #333', letterSpacing: '0.05em', minWidth: 46 },
-
-  // Break body cells — narrow + compact
   breakBodyCell: { background: '#fff9e6', border: '1px solid #f0e0a0', textAlign: 'center', padding: '4px 2px', width: 38, maxWidth: 52 },
   breakLabel:    { fontSize: 9, color: '#b8860b', fontWeight: 700, writingMode: 'vertical-rl', transform: 'rotate(180deg)', margin: '0 auto', lineHeight: 1.2 },
+  entryTd:    { padding: 2, border: '1px solid #e8e8e8', minWidth: 72, height: 46 },
+  entryCard:  { borderRadius: 4, padding: '4px 6px', height: '100%', boxSizing: 'border-box', position: 'relative', display: 'flex', flexDirection: 'column', justifyContent: 'center' },
+  subjectText:{ fontWeight: 700, fontSize: 10, lineHeight: 1.3 },
+  teacherText:{ fontSize: 9, marginTop: 2, lineHeight: 1.2 },
+  deleteBtn:  { position: 'absolute', top: 2, right: 3, background: 'none', border: 'none', cursor: 'pointer', fontSize: 9, padding: 0, color: 'rgba(255,255,255,0.6)' },
+  addBtn:     { width: '100%', height: '100%', minHeight: 42, background: 'none', border: '1.5px dashed #e0e0e0', borderRadius: 4, color: '#ddd', fontSize: 14, cursor: 'pointer' },
 
-  // Entry cells — reduced height for compactness
-  entryTd:  { padding: 2, border: '1px solid #e8e8e8', minWidth: 72, height: 46 },
-  entryCard:{ borderRadius: 4, padding: '4px 6px', height: '100%', boxSizing: 'border-box', position: 'relative', display: 'flex', flexDirection: 'column', justifyContent: 'center' },
-  subjectText: { fontWeight: 700, fontSize: 10, lineHeight: 1.3 },
-  teacherText: { fontSize: 9, marginTop: 2, lineHeight: 1.2 },
-  deleteBtn:   { position: 'absolute', top: 2, right: 3, background: 'none', border: 'none', cursor: 'pointer', fontSize: 9, padding: 0, color: 'rgba(255,255,255,0.6)' },
-  addBtn:      { width: '100%', height: '100%', minHeight: 42, background: 'none', border: '1.5px dashed #e0e0e0', borderRadius: 4, color: '#ddd', fontSize: 14, cursor: 'pointer' },
-
-  footer:      { borderTop: '2px solid #1a1a2e', padding: '10px 20px', display: 'flex', gap: 40, background: '#fafafa' },
   footerLabel: { fontSize: 11, fontWeight: 600, color: '#444', letterSpacing: '0.03em' },
 
+  // Slot pills
   slotsSection: { marginTop: 8 },
   slotsTitle:   { fontSize: 11, fontWeight: 700, color: '#6c63ff', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 10 },
   slotsList:    { display: 'flex', flexWrap: 'wrap', gap: 8 },
@@ -511,11 +569,148 @@ const s = {
   slotPillTime: { color: '#aaa', fontSize: 11 },
   slotDeleteBtn:{ background: 'none', border: 'none', cursor: 'pointer', color: '#ccc', fontSize: 12, padding: 0 },
 
+  // Modals
   modalBody:   { padding: '20px 24px', overflowY: 'auto', maxHeight: '60vh' },
   modalFooter: { display: 'flex', justifyContent: 'flex-end', gap: 12, padding: '16px 24px', borderTop: '1px solid #f0f0f0' },
   formError:   { background: '#fff0f0', border: '1px solid #ffcdd2', borderRadius: 8, padding: '10px 14px', color: '#c0392b', fontSize: 13, marginBottom: 16 },
   hint:        { fontSize: 12, color: '#aaa', margin: '0 0 16px', fontStyle: 'italic' },
-  grid2:       { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 },
   label:       { display: 'block', fontSize: 12, fontWeight: 600, color: '#666', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' },
   input:       { width: '100%', boxSizing: 'border-box', padding: '10px 12px', border: '1.5px solid #e8e8e8', borderRadius: 8, fontSize: 14, color: '#1a1a2e', outline: 'none' },
+
+  // Mobile utility
+  btnFullWidth: { width: '100%', justifyContent: 'center' },
 };
+
+// ─── Responsive styles (change with viewport) ─────────────────────────────────
+// Centralising all responsive overrides in one place makes diffs clean and
+// easy to review — no hunting through JSX for ad-hoc isMobile ternaries.
+
+function responsive(isMobile) {
+  return {
+    // Page shell — tighter horizontal padding on mobile
+    page: {
+      padding: isMobile ? '16px' : '24px 28px',
+      fontFamily: 'inherit',
+    },
+
+    // Header — stacks vertically on mobile so buttons never overflow
+    header: {
+      display: 'flex',
+      flexDirection: isMobile ? 'column' : 'row',
+      justifyContent: 'space-between',
+      alignItems: isMobile ? 'stretch' : 'flex-start',
+      gap: isMobile ? 12 : 0,
+      marginBottom: 20,
+    },
+
+    headerText: {
+      // On mobile give the text room before the buttons appear below
+      marginBottom: isMobile ? 4 : 0,
+    },
+
+    // Action buttons — full-width column on mobile, row on desktop
+    headerActions: {
+      display: 'flex',
+      flexDirection: isMobile ? 'column' : 'row',
+      gap: 8,
+      width: isMobile ? '100%' : 'auto',
+    },
+
+    // Toolbar — stacks fully on mobile
+    toolbar: {
+      display: 'flex',
+      flexDirection: isMobile ? 'column' : 'row',
+      gap: isMobile ? 10 : 12,
+      marginBottom: 20,
+      alignItems: isMobile ? 'stretch' : 'center',
+    },
+
+    // Segmented control — full width on mobile for easier tapping
+    segmented: {
+      display: 'flex',
+      border: '1.5px solid #e8e8e8',
+      borderRadius: 8,
+      overflow: 'hidden',
+      width: isMobile ? '100%' : 'fit-content',
+    },
+
+    segment: {
+      flex: isMobile ? 1 : 'none',            // equal halves on mobile
+      padding: isMobile ? '10px 12px' : '8px 16px',
+      background: '#fff',
+      border: 'none',
+      cursor: 'pointer',
+      fontSize: 13,
+      color: '#888',
+      transition: 'all 0.15s',
+      textAlign: 'center',
+    },
+
+    // Select row — stacks on mobile, inline on desktop
+    selectRow: {
+      display: 'flex',
+      flexDirection: isMobile ? 'column' : 'row',
+      gap: isMobile ? 10 : 12,
+      flex: 1,
+    },
+
+    // Select — full width always; min-width only on desktop
+    select: {
+      width: '100%',
+      padding: '10px 14px',
+      border: '1.5px solid #e8e8e8',
+      borderRadius: 8,
+      fontSize: 14,
+      outline: 'none',
+      color: '#1a1a2e',
+      background: '#fff',
+      // Minimum width on desktop so they don't shrink too much next to each other
+      minWidth: isMobile ? 'unset' : 180,
+    },
+
+    // Timetable title bar — stack on very small screens
+    titleBar: {
+      background: '#1a1a2e',
+      padding: isMobile ? '12px 14px' : '14px 20px',
+      display: 'flex',
+      flexDirection: isMobile ? 'column' : 'row',
+      justifyContent: 'space-between',
+      alignItems: isMobile ? 'flex-start' : 'center',
+      gap: isMobile ? 4 : 0,
+    },
+
+    ttTitle: {
+      fontSize: isMobile ? 14 : 18,
+      fontWeight: 800,
+      color: '#fff',
+      letterSpacing: '0.06em',
+    },
+
+    // Legend — tighter on mobile
+    legend: {
+      display: 'flex',
+      flexWrap: 'wrap',
+      gap: isMobile ? 6 : 10,
+      padding: isMobile ? '8px 12px' : '10px 16px',
+      borderBottom: '1px solid #eee',
+      background: '#fafafa',
+    },
+
+    // Card footer — stack labels on mobile
+    footer: {
+      borderTop: '2px solid #1a1a2e',
+      padding: isMobile ? '10px 14px' : '10px 20px',
+      display: 'flex',
+      flexDirection: isMobile ? 'column' : 'row',
+      gap: isMobile ? 8 : 40,
+      background: '#fafafa',
+    },
+
+    // Modal form grid — single column on mobile
+    grid2: {
+      display: 'grid',
+      gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr',
+      gap: 16,
+    },
+  };
+}
