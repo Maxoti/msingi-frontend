@@ -2,8 +2,22 @@
  * ExamPrimitives.jsx
  * Shared small components: TypeBadge, StatusBadge, StatCard, ValidationMsg, ActionBtn
  */
-
 import { TYPE_META, STATUS_META } from './examConstants';
+
+// Inject mobile styles once
+const mobileCSS = `
+  @media (max-width: 640px) {
+    .stat-cards-row { flex-direction: column !important; }
+    .stat-card      { min-width: unset !important; width: 100% !important; }
+    .exam-page-inner{ padding: 16px !important; }
+  }
+`;
+if (typeof document !== 'undefined' && !document.getElementById('primitives-mobile-style')) {
+  const tag = document.createElement('style');
+  tag.id = 'primitives-mobile-style';
+  tag.textContent = mobileCSS;
+  document.head.appendChild(tag);
+}
 
 export const TypeBadge = ({ type }) => {
   const st = TYPE_META[type] || { bg: '#F3F4F6', color: '#374151', border: '#E5E7EB', dot: '#9CA3AF' };
@@ -26,16 +40,18 @@ export const StatusBadge = ({ status }) => {
 };
 
 export const StatCard = ({ label, value, gradient, icon }) => (
-  <div style={{
-    background:   gradient,
-    borderRadius: 12,
-    padding:      '20px 24px',
-    flex:         1,
-    minWidth:     140,
-    position:     'relative',
-    overflow:     'hidden',
-    boxShadow:    '0 4px 14px rgba(0,0,0,.12)',
-  }}>
+  <div
+    className="stat-card"
+    style={{
+      background:   gradient,
+      borderRadius: 12,
+      padding:      '20px 24px',
+      flex:         1,
+      minWidth:     140,
+      position:     'relative',
+      overflow:     'hidden',
+      boxShadow:    '0 4px 14px rgba(0,0,0,.12)',
+    }}>
     <div style={{
       position: 'absolute', right: -18, top: -18,
       width: 80, height: 80, borderRadius: '50%',
@@ -53,7 +69,7 @@ export const StatCard = ({ label, value, gradient, icon }) => (
 
 export const ValidationMsg = ({ msg }) => msg ? (
   <div style={{ fontSize: 12, color: '#DC2626', marginTop: 4, display: 'flex', alignItems: 'center', gap: 4 }}>
-    <span></span> {msg}
+    <span>⚠</span> {msg}
   </div>
 ) : null;
 

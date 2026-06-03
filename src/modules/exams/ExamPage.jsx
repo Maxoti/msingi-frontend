@@ -141,10 +141,10 @@ export default function ExamPage() {
         </div>
       </div>
 
-      <div style={{ padding: '28px 32px', maxWidth: 1280, margin: '0 auto' }}>
+      <div className="exam-page-inner" style={{ padding: '28px 32px', maxWidth: 1280, margin: '0 auto' }}>
 
         {/* ── Stat Cards ── */}
-        <div style={{ display: 'flex', gap: 14, marginBottom: 24, flexWrap: 'wrap' }}>
+        <div className="stat-cards-row"style={{ display: 'flex', gap: 14, marginBottom: 24, flexWrap: 'wrap' }}>
           <StatCard label="Total Exams" value={total}      gradient="linear-gradient(135deg,#0f172a 0%,#1e293b 100%)" />
           <StatCard label="Published"   value={published}  gradient="linear-gradient(135deg,#059669 0%,#047857 100%)" />
           <StatCard label="Draft"       value={draft}      gradient="linear-gradient(135deg,#f59e0b 0%,#d97706 100%)" />
