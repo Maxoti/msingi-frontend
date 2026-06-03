@@ -296,17 +296,17 @@ export default function StudentsPage() {
                 {/* Actions */}
                 <div style={{ display:'flex', gap:8 }}>
                   <button onClick={() => setProfileId(student.id)} style={s.mobileActionBtn}>
-                    👁 View
+                     View
                   </button>
                   <button onClick={() => setEditStudent(student)} style={s.mobileActionBtn}>
-                    ✏️ Edit
+                     Edit
                   </button>
                   <button
                     onClick={() => handleDelete(student)}
                     disabled={deleting === student.id}
                     style={{ ...s.mobileActionBtn, background:'#fff0f0', color:'#dc2626' }}
                   >
-                    {deleting === student.id ? '...' : '🗑 Delete'}
+                    {deleting === student.id ? '...' : ' Delete'}
                   </button>
                 </div>
               </div>
@@ -351,7 +351,7 @@ export default function StudentsPage() {
 function EmptyState({ search, onAdd }) {
   return (
     <div style={s.empty}>
-      <div style={{ fontSize: 48, marginBottom: 12 }}>🎒</div>
+      <div style={{ fontSize: 48, marginBottom: 12 }}></div>
       <h3 style={{ margin: '0 0 8px', color: '#333' }}>No students found</h3>
       <p style={{ color: '#aaa', margin: '0 0 16px' }}>
         {search ? 'Try a different search term' : 'Click "Add Student" to get started'}
