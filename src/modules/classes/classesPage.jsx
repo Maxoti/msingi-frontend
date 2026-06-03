@@ -64,7 +64,7 @@ function Toast({ message, type, onClose }) {
 
   return (
     <div style={{
-      position:'fixed', bottom:28, right:28, zIndex:9999,
+      position:'fixed', bottom:28, right:16, left:16, zIndex:9999,
       display:'flex', alignItems:'center', gap:12,
       background: type === 'error' ? '#fee2e2' : '#d1fae5',
       border: `1.5px solid ${type === 'error' ? '#fca5a5' : '#6ee7b7'}`,
@@ -73,11 +73,10 @@ function Toast({ message, type, onClose }) {
       color: type === 'error' ? '#b91c1c' : '#065f46',
       animation:'slideUp .25s ease',
     }}>
-      <Icon path={type === 'error' ? ICONS.warning : ICONS.check}
-        size={16} />
+      <Icon path={type === 'error' ? ICONS.warning : ICONS.check} size={16} />
       {message}
       <button onClick={onClose} style={{background:'none',border:'none',cursor:'pointer',
-        padding:0,display:'flex',opacity:.6}}>
+        padding:0,display:'flex',opacity:.6,marginLeft:'auto'}}>
         <Icon path={ICONS.close} size={14} />
       </button>
     </div>
@@ -110,7 +109,7 @@ function ClassCard({ cls, onEdit, onDelete, onViewStudents, onManageTeacher, sel
     <div onClick={onSelect} style={{
       background:'#fff',
       border: selected ? '2px solid #6366f1' : '1.5px solid #e2e8f0',
-      borderRadius:16, padding:20, cursor:'pointer',
+      borderRadius:16, padding:16, cursor:'pointer',
       transition:'all .18s ease',
       boxShadow: selected ? '0 0 0 4px rgba(99,102,241,.1)' : '0 1px 4px rgba(0,0,0,.05)',
       position:'relative', overflow:'hidden',
@@ -120,7 +119,7 @@ function ClassCard({ cls, onEdit, onDelete, onViewStudents, onManageTeacher, sel
     >
       {/* Grade badge */}
       {cls.grade_level && (
-        <div style={{position:'absolute',top:14,right:14,
+        <div style={{position:'absolute',top:12,right:12,
           background:'#ede9fe',color:'#6d28d9',
           fontSize:10,fontWeight:700,letterSpacing:.5,
           padding:'3px 8px',borderRadius:99,textTransform:'uppercase'}}>
@@ -128,15 +127,16 @@ function ClassCard({ cls, onEdit, onDelete, onViewStudents, onManageTeacher, sel
         </div>
       )}
 
-      <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:14}}>
+      <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:14,paddingRight:70}}>
         <div style={{width:38,height:38,borderRadius:10,
           background: isFull ? '#fee2e2' : '#ede9fe',
           display:'flex',alignItems:'center',justifyContent:'center',
           color: isFull ? '#dc2626' : '#7c3aed',flexShrink:0}}>
           <Icon path={ICONS.cap} size={18} />
         </div>
-        <div>
-          <div style={{fontWeight:700,fontSize:15,color:'#1e293b',lineHeight:1.2}}>
+        <div style={{minWidth:0}}>
+          <div style={{fontWeight:700,fontSize:15,color:'#1e293b',lineHeight:1.2,
+            overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>
             {cls.name}
           </div>
           {cls.teacher_name && (
@@ -149,21 +149,13 @@ function ClassCard({ cls, onEdit, onDelete, onViewStudents, onManageTeacher, sel
 
       <CapacityBar used={parseInt(cls.student_count||0)} total={cls.capacity} />
 
-      {/* Action row */}
-      <div style={{display:'flex',gap:6,marginTop:14}}
+      {/* Action row — wraps on mobile */}
+      <div style={{display:'flex',gap:6,marginTop:14,flexWrap:'wrap'}}
         onClick={e => e.stopPropagation()}>
-        <ActionBtn icon={ICONS.users} label="Students"
-          onClick={() => onViewStudents(cls)}
-          color="#6366f1" bg="#eef2ff" />
-        <ActionBtn icon={ICONS.teacher} label="Teacher"
-          onClick={() => onManageTeacher(cls)}
-          color="#0891b2" bg="#e0f2fe" />
-        <ActionBtn icon={ICONS.edit} label="Edit"
-          onClick={() => onEdit(cls)}
-          color="#0d9488" bg="#f0fdfa" />
-        <ActionBtn icon={ICONS.trash} label="Delete"
-          onClick={() => onDelete(cls)}
-          color="#dc2626" bg="#fef2f2" />
+        <ActionBtn icon={ICONS.users}   label="Students" onClick={() => onViewStudents(cls)}  color="#6366f1" bg="#eef2ff" />
+        <ActionBtn icon={ICONS.teacher} label="Teacher"  onClick={() => onManageTeacher(cls)} color="#0891b2" bg="#e0f2fe" />
+        <ActionBtn icon={ICONS.edit}    label="Edit"     onClick={() => onEdit(cls)}           color="#0d9488" bg="#f0fdfa" />
+        <ActionBtn icon={ICONS.trash}   label="Delete"   onClick={() => onDelete(cls)}         color="#dc2626" bg="#fef2f2" />
       </div>
     </div>
   );
@@ -172,10 +164,11 @@ function ClassCard({ cls, onEdit, onDelete, onViewStudents, onManageTeacher, sel
 function ActionBtn({ icon, label, onClick, color, bg }) {
   return (
     <button onClick={onClick} title={label} style={{
-      flex:1, display:'flex', alignItems:'center', justifyContent:'center', gap:5,
-      border:'none', borderRadius:8, padding:'7px 4px', cursor:'pointer',
+      flex:'1 1 auto', minWidth:60,
+      display:'flex', alignItems:'center', justifyContent:'center', gap:5,
+      border:'none', borderRadius:8, padding:'7px 6px', cursor:'pointer',
       background:bg, color:color, fontSize:11, fontWeight:600,
-      transition:'opacity .15s',
+      transition:'opacity .15s', whiteSpace:'nowrap',
     }}
       onMouseEnter={e => e.currentTarget.style.opacity='.75'}
       onMouseLeave={e => e.currentTarget.style.opacity='1'}>
@@ -201,7 +194,7 @@ function Modal({ title, onClose, children, width = 480 }) {
           <h3 style={{margin:0,fontSize:17,fontWeight:700,color:'#1e293b'}}>{title}</h3>
           <button onClick={onClose} style={{background:'#f1f5f9',border:'none',
             width:30,height:30,borderRadius:8,cursor:'pointer',display:'flex',
-            alignItems:'center',justifyContent:'center',color:'#64748b'}}>
+            alignItems:'center',justifyContent:'center',color:'#64748b',flexShrink:0}}>
             <Icon path={ICONS.close} size={15} />
           </button>
         </div>
@@ -330,9 +323,7 @@ function StudentsModal({ cls, students: rawStudents, loading, onClose }) {
   return (
     <Modal title={`Students — ${cls.name}`} onClose={onClose} width={520}>
       {loading ? (
-        <div style={{textAlign:'center',padding:'32px 0',color:'#94a3b8'}}>
-          Loading students…
-        </div>
+        <div style={{textAlign:'center',padding:'32px 0',color:'#94a3b8'}}>Loading students…</div>
       ) : students.length === 0 ? (
         <div style={{textAlign:'center',padding:'32px 0'}}>
           <div style={{fontSize:32,marginBottom:8}}>🎒</div>
@@ -367,7 +358,6 @@ function StudentsModal({ cls, students: rawStudents, loading, onClose }) {
 
 function TeacherModal({ cls, onAssign, onRemove, onClose, loading }) {
   const [teacherId, setTeacherId] = useState('');
-
   return (
     <Modal title={`Manage Teacher — ${cls.name}`} onClose={onClose} width={440}>
       {cls.teacher_name ? (
@@ -375,13 +365,11 @@ function TeacherModal({ cls, onAssign, onRemove, onClose, loading }) {
           <div style={{display:'flex',alignItems:'center',gap:12,
             background:'#f0f9ff',borderRadius:12,padding:'14px 16px',marginBottom:20}}>
             <div style={{width:40,height:40,borderRadius:10,background:'#bae6fd',
-              display:'flex',alignItems:'center',justifyContent:'center',color:'#0369a1'}}>
+              display:'flex',alignItems:'center',justifyContent:'center',color:'#0369a1',flexShrink:0}}>
               <Icon path={ICONS.teacher} size={20} />
             </div>
             <div>
-              <div style={{fontWeight:700,color:'#0c4a6e',fontSize:14}}>
-                {cls.teacher_name}
-              </div>
+              <div style={{fontWeight:700,color:'#0c4a6e',fontSize:14}}>{cls.teacher_name}</div>
               <div style={{fontSize:11,color:'#7dd3fc'}}>Current teacher</div>
             </div>
           </div>
@@ -404,8 +392,7 @@ function TeacherModal({ cls, onAssign, onRemove, onClose, loading }) {
           </p>
           <FormField label="Teacher ID" required>
             <input style={inputStyle} type="number" value={teacherId}
-              onChange={e => setTeacherId(e.target.value)}
-              placeholder="Enter teacher ID"
+              onChange={e => setTeacherId(e.target.value)} placeholder="Enter teacher ID"
               onFocus={e => e.target.style.borderColor='#6366f1'}
               onBlur={e => e.target.style.borderColor='#e2e8f0'} />
           </FormField>
@@ -431,82 +418,88 @@ function TeacherModal({ cls, onAssign, onRemove, onClose, loading }) {
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function ClassesPage() {
-  const dispatch    = useDispatch();
-  const classes     = useSelector(selectFilteredClasses);
-  const loading     = useSelector(selectClassesLoading);
-  const error       = useSelector(selectClassesError);
-  const success     = useSelector(selectClassesSuccess);
-  const filters     = useSelector(selectClassesFilters);
+  const dispatch = useDispatch();
+  const classes  = useSelector(selectFilteredClasses);
+  const loading  = useSelector(selectClassesLoading);
+  const error    = useSelector(selectClassesError);
+  const success  = useSelector(selectClassesSuccess);
+  const filters  = useSelector(selectClassesFilters);
 
-  const [modal,    setModal]    = useState(null);
-  const [target,   setTarget]   = useState(null);
+  const [modal,  setModal]  = useState(null);
+  const [target, setTarget] = useState(null);
   const studentSelector = useMemo(() => selectClassStudents(target?.id), [target?.id]);
   const students = useSelector(studentSelector);
 
   useEffect(() => { dispatch(fetchClasses()); }, [dispatch]);
 
   useEffect(() => {
-    if (modal === 'students' && target) {
-      dispatch(fetchClassStudents(target.id));
-    }
+    if (modal === 'students' && target) dispatch(fetchClassStudents(target.id));
   }, [modal, target, dispatch]);
 
-  const closeModal  = useCallback(() => { setModal(null); setTarget(null); }, []);
-  const clearToast  = useCallback(() => {
+  const closeModal = useCallback(() => { setModal(null); setTarget(null); }, []);
+  const clearToast = useCallback(() => {
     dispatch(clearError()); dispatch(clearSuccessMessage());
   }, [dispatch]);
 
-  // ── Handlers ────────────────────────────────────────────────────────────────
   const handleCreate = async (formData) => {
     const result = await dispatch(createClass(formData));
     if (!result.error) closeModal();
   };
-
   const handleUpdate = async (formData) => {
     const result = await dispatch(updateClass({ id: target.id, updateData: formData }));
     if (!result.error) closeModal();
   };
-
   const handleDelete = async () => {
     const result = await dispatch(deleteClass(target.id));
     if (!result.error) closeModal();
   };
-
   const handleAssignTeacher = async (classId, teacherId) => {
     const result = await dispatch(assignTeacher({ classId, teacherId: Number(teacherId) }));
     if (!result.error) closeModal();
   };
-
   const handleRemoveTeacher = async (classId) => {
     const result = await dispatch(removeTeacher(classId));
     if (!result.error) closeModal();
   };
 
-  // ── Stats ────────────────────────────────────────────────────────────────────
-  const totalStudents  = classes.reduce((s, c) => s + parseInt(c.student_count || 0), 0);
-  const fullClasses    = classes.filter(c => parseInt(c.student_count||0) >= c.capacity).length;
-  const withTeacher    = classes.filter(c => c.class_teacher_id).length;
+  const totalStudents = classes.reduce((s, c) => s + parseInt(c.student_count || 0), 0);
+  const fullClasses   = classes.filter(c => parseInt(c.student_count||0) >= c.capacity).length;
+  const withTeacher   = classes.filter(c => c.class_teacher_id).length;
 
   return (
     <div style={{ minHeight:'100vh', background:'#f8fafc', fontFamily:"'DM Sans', system-ui, sans-serif" }}>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap');
-        @keyframes fadeIn   { from{opacity:0} to{opacity:1} }
-        @keyframes scaleIn  { from{opacity:0;transform:scale(.96)} to{opacity:1;transform:scale(1)} }
-        @keyframes slideUp  { from{opacity:0;transform:translateY(12px)} to{opacity:1;transform:translateY(0)} }
+        @keyframes fadeIn  { from{opacity:0} to{opacity:1} }
+        @keyframes scaleIn { from{opacity:0;transform:scale(.96)} to{opacity:1;transform:scale(1)} }
+        @keyframes slideUp { from{opacity:0;transform:translateY(12px)} to{opacity:1;transform:translateY(0)} }
         * { box-sizing:border-box; }
         ::-webkit-scrollbar { width:6px }
         ::-webkit-scrollbar-track { background:#f1f5f9 }
         ::-webkit-scrollbar-thumb { background:#cbd5e1;border-radius:3px }
+
+        /* ── Mobile overrides ── */
+        @media (max-width: 640px) {
+          .cp-header        { padding: 0 16px !important; height: auto !important; min-height: 64px; flex-wrap: wrap; gap: 8px; padding-top: 12px !important; padding-bottom: 12px !important; }
+          .cp-stats-grid    { grid-template-columns: 1fr !important; padding: 16px 16px 0 !important; gap: 10px !important; }
+          .cp-stat-card     { padding: 14px 16px !important; }
+          .cp-stat-value    { font-size: 22px !important; }
+          .cp-filters       { padding: 12px 16px 0 !important; }
+          .cp-grid          { padding: 16px 16px 32px !important; }
+          .cp-cards-grid    { grid-template-columns: 1fr !important; }
+          .cp-new-btn span  { display: none; }
+        }
       `}</style>
 
-      {/* ── Header ───────────────────────────────────────────────────────────── */}
-      <div style={{ background:'#fff', borderBottom:'1px solid #f1f5f9',
+      {/* ── Header ── */}
+      <div className="cp-header" style={{
+        background:'#fff', borderBottom:'1px solid #f1f5f9',
         padding:'0 32px', display:'flex', alignItems:'center',
-        justifyContent:'space-between', height:64 }}>
+        justifyContent:'space-between', height:64,
+      }}>
         <div style={{ display:'flex', alignItems:'center', gap:12 }}>
           <div style={{ width:36, height:36, borderRadius:10, background:'#ede9fe',
-            display:'flex', alignItems:'center', justifyContent:'center', color:'#7c3aed' }}>
+            display:'flex', alignItems:'center', justifyContent:'center', color:'#7c3aed', flexShrink:0 }}>
             <Icon path={ICONS.cap} size={20} />
           </div>
           <div>
@@ -519,88 +512,63 @@ export default function ClassesPage() {
           </div>
         </div>
 
-        <button onClick={() => setModal('create')} style={{
+        <button onClick={() => setModal('create')} className="cp-new-btn" style={{
           display:'flex', alignItems:'center', gap:7, padding:'9px 18px',
           background:'#6366f1', color:'#fff', border:'none', borderRadius:10,
           fontFamily:'inherit', fontSize:14, fontWeight:700, cursor:'pointer',
-          transition:'background .15s',
+          transition:'background .15s', flexShrink:0,
         }}
           onMouseEnter={e => e.currentTarget.style.background='#4f46e5'}
           onMouseLeave={e => e.currentTarget.style.background='#6366f1'}>
           <Icon path={ICONS.plus} size={16} />
-          New Class
+          <span>New Class</span>
         </button>
       </div>
 
-      {/* ── Stats Bar ────────────────────────────────────────────────────────── */}
-<div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)',
-  gap:16, padding:'24px 32px 0' }}>
-  {[
-    {
-      label:'Total Students', value:totalStudents,
-      color:'#fff', valueColor:'#fff', labelColor:'rgba(255,255,255,.75)',
-      iconBg:'rgba(255,255,255,.2)', iconColor:'#fff',
-      background:'linear-gradient(135deg,#6366f1 0%,#4f46e5 100%)',
-      border:'none', icon:ICONS.users,
-    },
-    {
-      label:'Classes at Capacity', value:`${fullClasses}/${classes.length}`,
-      color:'#fff', valueColor:'#fff', labelColor:'rgba(255,255,255,.75)',
-      iconBg:'rgba(255,255,255,.2)', iconColor:'#fff',
-      background:'linear-gradient(135deg,#f43f5e 0%,#dc2626 100%)',
-      border:'none', icon:ICONS.warning,
-    },
-    {
-      label:'With Assigned Teacher', value:`${withTeacher}/${classes.length}`,
-      color:'#fff', valueColor:'#fff', labelColor:'rgba(255,255,255,.75)',
-      iconBg:'rgba(255,255,255,.2)', iconColor:'#fff',
-      background:'linear-gradient(135deg,#0ea5e9 0%,#0369a1 100%)',
-      border:'none', icon:ICONS.teacher,
-    },
-  ].map(({ label, value, valueColor, labelColor, iconBg, iconColor, background, border, icon }, i) => (
-    <div key={i} style={{
-      background,
-      borderRadius:14,
-      padding:'20px 24px',
-      border: border || 'none',
-      display:'flex',
-      alignItems:'center',
-      gap:16,
-      boxShadow:'0 4px 14px rgba(0,0,0,.12)',
-      position:'relative',
-      overflow:'hidden',
-      animation:`slideUp .3s ${i * .08}s ease both`,
-    }}>
-      {/* decorative circle */}
-      <div style={{
-        position:'absolute', right:-20, top:-20,
-        width:90, height:90, borderRadius:'50%',
-        background:'rgba(255,255,255,.08)',
-        pointerEvents:'none',
-      }}/>
-      <div style={{
-        width:46, height:46, borderRadius:12,
-        background:iconBg,
-        display:'flex', alignItems:'center', justifyContent:'center',
-        color:iconColor, flexShrink:0,
+      {/* ── Stats Bar ── */}
+      <div className="cp-stats-grid" style={{
+        display:'grid', gridTemplateColumns:'repeat(3,1fr)',
+        gap:16, padding:'24px 32px 0',
       }}>
-        <Icon path={icon} size={22} />
+        {[
+          { label:'Total Students',          value:totalStudents,                   icon:ICONS.users,   bg:'linear-gradient(135deg,#6366f1 0%,#4f46e5 100%)' },
+          { label:'Classes at Capacity',     value:`${fullClasses}/${classes.length}`, icon:ICONS.warning, bg:'linear-gradient(135deg,#f43f5e 0%,#dc2626 100%)' },
+          { label:'With Assigned Teacher',   value:`${withTeacher}/${classes.length}`, icon:ICONS.teacher, bg:'linear-gradient(135deg,#0ea5e9 0%,#0369a1 100%)' },
+        ].map(({ label, value, icon, bg }, i) => (
+          <div key={i} className="cp-stat-card" style={{
+            background:bg, borderRadius:14, padding:'20px 24px',
+            display:'flex', alignItems:'center', gap:16,
+            boxShadow:'0 4px 14px rgba(0,0,0,.12)',
+            position:'relative', overflow:'hidden',
+            animation:`slideUp .3s ${i * .08}s ease both`,
+          }}>
+            <div style={{
+              position:'absolute', right:-20, top:-20,
+              width:90, height:90, borderRadius:'50%',
+              background:'rgba(255,255,255,.08)', pointerEvents:'none',
+            }}/>
+            <div style={{
+              width:46, height:46, borderRadius:12,
+              background:'rgba(255,255,255,.2)',
+              display:'flex', alignItems:'center', justifyContent:'center',
+              color:'#fff', flexShrink:0,
+            }}>
+              <Icon path={icon} size={22} />
+            </div>
+            <div>
+              <div className="cp-stat-value" style={{
+                fontSize:26, fontWeight:800, color:'#fff', lineHeight:1, letterSpacing:-.5,
+              }}>{value}</div>
+              <div style={{ fontSize:12, fontWeight:500, color:'rgba(255,255,255,.75)', marginTop:4 }}>
+                {label}
+              </div>
+            </div>
+          </div>
+        ))}
       </div>
-      <div>
-        <div style={{
-          fontSize:26, fontWeight:800,
-          color:valueColor, lineHeight:1, letterSpacing:-.5,
-        }}>{value}</div>
-        <div style={{
-          fontSize:12, fontWeight:500,
-          color:labelColor, marginTop:4,
-        }}>{label}</div>
-      </div>
-    </div>
-  ))}
-</div>
-      {/* ── Filters ──────────────────────────────────────────────────────────── */}
-      <div style={{ padding:'20px 32px 0', display:'flex', gap:12, flexWrap:'wrap' }}>
+
+      {/* ── Filters ── */}
+      <div className="cp-filters" style={{ padding:'20px 32px 0', display:'flex', gap:12, flexWrap:'wrap' }}>
         <div style={{ position:'relative', flex:'1 1 240px' }}>
           <div style={{ position:'absolute', left:12, top:'50%', transform:'translateY(-50%)',
             color:'#94a3b8', pointerEvents:'none' }}>
@@ -614,7 +582,7 @@ export default function ClassesPage() {
             onBlur={e => e.target.style.borderColor='#e2e8f0'} />
         </div>
 
-        <select style={{ ...inputStyle, flex:'0 0 160px', background:'#fff', cursor:'pointer' }}
+        <select style={{ ...inputStyle, flex:'1 1 140px', background:'#fff', cursor:'pointer' }}
           value={filters.grade_level}
           onChange={e => dispatch(setFilters({ grade_level: e.target.value }))}
           onFocus={e => e.target.style.borderColor='#6366f1'}
@@ -638,10 +606,10 @@ export default function ClassesPage() {
         )}
       </div>
 
-      {/* ── Grid ─────────────────────────────────────────────────────────────── */}
-      <div style={{ padding:'20px 32px 40px' }}>
+      {/* ── Grid ── */}
+      <div className="cp-grid" style={{ padding:'20px 32px 40px' }}>
         {loading.list ? (
-          <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(280px,1fr))', gap:16 }}>
+          <div className="cp-cards-grid" style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(280px,1fr))', gap:16 }}>
             {[...Array(6)].map((_,i) => (
               <div key={i} style={{ height:180, background:'#fff', borderRadius:16,
                 border:'1.5px solid #f1f5f9',
@@ -652,7 +620,7 @@ export default function ClassesPage() {
           </div>
         ) : classes.length === 0 ? (
           <div style={{ textAlign:'center', padding:'80px 0', color:'#94a3b8' }}>
-            <div style={{ fontSize:48, marginBottom:12 }}></div>
+            <div style={{ fontSize:48, marginBottom:12 }}>🏫</div>
             <h3 style={{ margin:'0 0 8px', fontSize:18, fontWeight:700, color:'#cbd5e1' }}>
               No classes found
             </h3>
@@ -674,66 +642,44 @@ export default function ClassesPage() {
             )}
           </div>
         ) : (
-          <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(280px,1fr))', gap:16 }}>
+          <div className="cp-cards-grid" style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(280px,1fr))', gap:16 }}>
             {classes.map((cls) => (
               <ClassCard
                 key={cls.id}
                 cls={cls}
                 selected={target?.id === cls.id}
                 onSelect={() => setTarget(t => t?.id === cls.id ? null : cls)}
-                onEdit={(c)            => { setTarget(c); setModal('edit'); }}
-                onDelete={(c)          => { setTarget(c); setModal('delete'); }}
-                onViewStudents={(c)    => { setTarget(c); setModal('students'); }}
-                onManageTeacher={(c)   => { setTarget(c); setModal('teacher'); }}
+                onEdit={(c)          => { setTarget(c); setModal('edit'); }}
+                onDelete={(c)        => { setTarget(c); setModal('delete'); }}
+                onViewStudents={(c)  => { setTarget(c); setModal('students'); }}
+                onManageTeacher={(c) => { setTarget(c); setModal('teacher'); }}
               />
             ))}
           </div>
         )}
       </div>
 
-      {/* ── Modals ───────────────────────────────────────────────────────────── */}
+      {/* ── Modals ── */}
       {modal === 'create' && (
-        <ClassFormModal
-          onSubmit={handleCreate}
-          onClose={closeModal}
-          loading={loading.create}
-        />
+        <ClassFormModal onSubmit={handleCreate} onClose={closeModal} loading={loading.create} />
       )}
       {modal === 'edit' && target && (
-        <ClassFormModal
-          initial={target}
-          onSubmit={handleUpdate}
-          onClose={closeModal}
-          loading={loading.update}
-        />
+        <ClassFormModal initial={target} onSubmit={handleUpdate} onClose={closeModal} loading={loading.update} />
       )}
       {modal === 'delete' && target && (
         <ConfirmModal
           message={`Are you sure you want to delete "${target.name}"? This cannot be undone.`}
-          onConfirm={handleDelete}
-          onClose={closeModal}
-          loading={loading.delete}
+          onConfirm={handleDelete} onClose={closeModal} loading={loading.delete}
         />
       )}
       {modal === 'students' && target && (
-        <StudentsModal
-          cls={target}
-          students={students}
-          loading={loading.students}
-          onClose={closeModal}
-        />
+        <StudentsModal cls={target} students={students} loading={loading.students} onClose={closeModal} />
       )}
       {modal === 'teacher' && target && (
-        <TeacherModal
-          cls={target}
-          onAssign={handleAssignTeacher}
-          onRemove={handleRemoveTeacher}
-          onClose={closeModal}
-          loading={loading.teacher}
-        />
+        <TeacherModal cls={target} onAssign={handleAssignTeacher} onRemove={handleRemoveTeacher} onClose={closeModal} loading={loading.teacher} />
       )}
 
-      {/* ── Toasts ───────────────────────────────────────────────────────────── */}
+      {/* ── Toasts ── */}
       {error   && <Toast message={error}   type="error"   onClose={clearToast} />}
       {success && <Toast message={success} type="success" onClose={clearToast} />}
     </div>
