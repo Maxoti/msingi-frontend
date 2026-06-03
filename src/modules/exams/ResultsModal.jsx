@@ -17,7 +17,21 @@ import {
 import { styles } from './examConstants';
 import { TypeBadge, StatusBadge, StatCard } from './ExamPrimitives';
 
+// ─── Hooks ────────────────────────────────────────────────────────────────────
+
+const useIsMobile = () => {
+  const [isMobile, setIsMobile] = useState(() => window.innerWidth < 768);
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 767px)');
+    const handler = (e) => setIsMobile(e.matches);
+    mq.addEventListener('change', handler);
+    return () => mq.removeEventListener('change', handler);
+  }, []);
+  return isMobile;
+};
+
 // ─── Grade helper ─────────────────────────────────────────────────────────────
+
 const getGrade = (pct) => {
   if (pct === null || pct === undefined) return null;
   if (pct >= 80) return 'EE';
@@ -34,10 +48,12 @@ const GRADE_STYLE = {
 };
 
 // ─── Pagination config ────────────────────────────────────────────────────────
+
 const PAGE_SIZE_OPTIONS = [10, 15, 20, 25, 40];
 const DEFAULT_PAGE_SIZE = 15;
 
 // ─── Rank helper ──────────────────────────────────────────────────────────────
+
 const computeRanks = (students, subjects, marks) => {
   const totals = students.map(st => {
     let total = 0; let filled = 0;
@@ -54,6 +70,7 @@ const computeRanks = (students, subjects, marks) => {
 };
 
 // ─── Print helpers ────────────────────────────────────────────────────────────
+
 const printMarkList = (exam, subjects, students, marks, schoolName, className) => {
   const maxTotal       = subjects.reduce((a, s) => a + s.max_marks, 0);
   const rankMap        = computeRanks(students, subjects, marks);
@@ -246,7 +263,8 @@ const printResultSlips = (exam, subjects, students, marks, schoolName, className
 };
 
 // ─── Pagination Component ─────────────────────────────────────────────────────
-const Pagination = ({ currentPage, totalPages, totalStudents, pageSize, onPageChange, onPageSizeChange }) => {
+
+const Pagination = ({ currentPage, totalPages, totalStudents, pageSize, onPageChange, onPageSizeChange, isMobile }) => {
   if (totalStudents === 0) return null;
 
   const pages = [];
@@ -268,12 +286,17 @@ const Pagination = ({ currentPage, totalPages, totalStudents, pageSize, onPageCh
 
   return (
     <div style={{
-      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-      padding: '10px 24px', borderTop: '1px solid #F3F4F6',
-      background: '#FAFAFA', flexWrap: 'wrap', gap: 8,
+      display: 'flex',
+      flexDirection: isMobile ? 'column' : 'row',
+      alignItems: isMobile ? 'stretch' : 'center',
+      justifyContent: 'space-between',
+      padding: '10px 16px',
+      borderTop: '1px solid #F3F4F6',
+      background: '#FAFAFA',
+      gap: 8,
     }}>
-      {/* Left — page size + info */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, fontSize: 13, color: '#6B7280' }}>
+      {/* Page size + info */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 13, color: '#6B7280', flexWrap: 'wrap' }}>
         <span>Rows per page:</span>
         <select
           value={pageSize}
@@ -283,59 +306,131 @@ const Pagination = ({ currentPage, totalPages, totalStudents, pageSize, onPageCh
             fontSize: 13, color: '#374151', background: '#fff', cursor: 'pointer', fontFamily: 'inherit',
           }}
         >
-          {PAGE_SIZE_OPTIONS.map(n => (
-            <option key={n} value={n}>{n}</option>
-          ))}
+          {PAGE_SIZE_OPTIONS.map(n => <option key={n} value={n}>{n}</option>)}
         </select>
         <span>
           {Math.min((currentPage - 1) * pageSize + 1, totalStudents)}–{Math.min(currentPage * pageSize, totalStudents)} of {totalStudents} students
         </span>
       </div>
 
-      {/* Right — page buttons */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-        <button
-          onClick={() => onPageChange(1)}
-          disabled={currentPage === 1}
-          style={{ ...btnStyle(false), opacity: currentPage === 1 ? 0.4 : 1 }}
-        >«</button>
-        <button
-          onClick={() => onPageChange(currentPage - 1)}
-          disabled={currentPage === 1}
-          style={{ ...btnStyle(false), opacity: currentPage === 1 ? 0.4 : 1 }}
-        >‹</button>
-
+      {/* Page buttons */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 4, justifyContent: isMobile ? 'center' : 'flex-end' }}>
+        <button onClick={() => onPageChange(1)} disabled={currentPage === 1}
+          style={{ ...btnStyle(false), opacity: currentPage === 1 ? 0.4 : 1 }}>«</button>
+        <button onClick={() => onPageChange(currentPage - 1)} disabled={currentPage === 1}
+          style={{ ...btnStyle(false), opacity: currentPage === 1 ? 0.4 : 1 }}>‹</button>
         {pages.map(p => {
-          // Show first, last, current and neighbors
-          const show = p === 1 || p === totalPages || Math.abs(p - currentPage) <= 1;
+          const show     = p === 1 || p === totalPages || Math.abs(p - currentPage) <= 1;
           const showDots = !show && (p === 2 || p === totalPages - 1);
           if (showDots) return <span key={p} style={{ padding: '0 4px', color: '#9CA3AF' }}>…</span>;
           if (!show) return null;
+          return <button key={p} onClick={() => onPageChange(p)} style={btnStyle(p === currentPage)}>{p}</button>;
+        })}
+        <button onClick={() => onPageChange(currentPage + 1)} disabled={currentPage === totalPages}
+          style={{ ...btnStyle(false), opacity: currentPage === totalPages ? 0.4 : 1 }}>›</button>
+        <button onClick={() => onPageChange(totalPages)} disabled={currentPage === totalPages}
+          style={{ ...btnStyle(false), opacity: currentPage === totalPages ? 0.4 : 1 }}>»</button>
+      </div>
+    </div>
+  );
+};
+
+// ─── Mobile student card (marks entry) ───────────────────────────────────────
+
+const StudentMarkCard = ({ student, globalIdx, subjects, marks, inputErrs, onMark, rowSummary }) => {
+  const { total, grade, allFilled } = rowSummary(student.id);
+  const gs = grade ? GRADE_STYLE[grade] : { background: '#F3F4F6', color: '#9CA3AF' };
+
+  return (
+    <div style={{
+      background: '#fff',
+      border: '1px solid #E5E7EB',
+      borderRadius: 10,
+      marginBottom: 10,
+      overflow: 'hidden',
+    }}>
+      {/* Student header */}
+      <div style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        padding: '10px 14px', background: '#F9FAFB', borderBottom: '1px solid #E5E7EB',
+      }}>
+        <div>
+          <span style={{ color: '#9CA3AF', fontSize: 12, marginRight: 8 }}>{globalIdx}</span>
+          <span style={{ fontWeight: 700, color: '#111827', fontSize: 14 }}>
+            {student.firstName} {student.lastName}
+          </span>
+          <div style={{ fontFamily: 'monospace', fontSize: 11, color: '#9CA3AF', marginTop: 2 }}>
+            {student.admissionNo}
+          </div>
+        </div>
+        {/* Total + grade badge */}
+        <div style={{ textAlign: 'right' }}>
+          <div style={{ fontWeight: 800, fontSize: 16, color: '#111827' }}>
+            {total !== null ? `${total}${allFilled ? '' : '+'}` : '—'}
+          </div>
+          <span style={{
+            ...gs, borderRadius: 5, padding: '2px 8px',
+            fontSize: 11, fontWeight: 700, display: 'inline-block', marginTop: 2,
+          }}>
+            {grade || '—'}
+          </span>
+        </div>
+      </div>
+
+      {/* Subject inputs — 2-column grid */}
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(2, 1fr)',
+        gap: '1px',
+        background: '#E5E7EB',
+      }}>
+        {subjects.map(s => {
+          const key   = `${student.id}-${s.id}`;
+          const isErr = inputErrs[key];
           return (
-            <button key={p} onClick={() => onPageChange(p)} style={btnStyle(p === currentPage)}>
-              {p}
-            </button>
+            <div key={s.id} style={{ background: '#fff', padding: '10px 12px' }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: '#6B7280', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                {s.subject_name}
+                <span style={{ fontWeight: 400, color: '#9CA3AF' }}> /{s.max_marks}</span>
+              </div>
+              <input
+                type="number"
+                min={0}
+                max={s.max_marks}
+                placeholder="—"
+                value={marks[student.id]?.[s.id] ?? ''}
+                onChange={e => onMark(student.id, s.id, s.max_marks, e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '7px 10px',
+                  borderRadius: 6,
+                  border: `1.5px solid ${isErr ? '#DC2626' : '#E5E7EB'}`,
+                  background: isErr ? '#FEF2F2' : '#FAFAFA',
+                  fontSize: 14,
+                  fontWeight: 600,
+                  textAlign: 'center',
+                  outline: 'none',
+                  color: '#111827',
+                  fontFamily: 'inherit',
+                }}
+              />
+              {isErr && (
+                <div style={{ fontSize: 10, color: '#DC2626', marginTop: 3 }}>max {s.max_marks}</div>
+              )}
+            </div>
           );
         })}
-
-        <button
-          onClick={() => onPageChange(currentPage + 1)}
-          disabled={currentPage === totalPages}
-          style={{ ...btnStyle(false), opacity: currentPage === totalPages ? 0.4 : 1 }}
-        >›</button>
-        <button
-          onClick={() => onPageChange(totalPages)}
-          disabled={currentPage === totalPages}
-          style={{ ...btnStyle(false), opacity: currentPage === totalPages ? 0.4 : 1 }}
-        >»</button>
       </div>
     </div>
   );
 };
 
 // ─── Main Component ───────────────────────────────────────────────────────────
+
 export const ResultsModal = ({ exam, onClose }) => {
   const dispatch = useDispatch();
+  const isMobile = useIsMobile();
+
   const subjects = useSelector(selectExamSubjects);
   const loading  = useSelector(selectExamLoading);
   const errors   = useSelector(selectExamErrors);
@@ -351,7 +446,6 @@ export const ResultsModal = ({ exam, onClose }) => {
   const [smsSending,  setSmsSending]  = useState(false);
   const [smsMsg,      setSmsMsg]      = useState(null);
 
-  // ── Pagination state ──────────────────────────────────────────────────────
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize,    setPageSize]    = useState(DEFAULT_PAGE_SIZE);
 
@@ -365,7 +459,6 @@ export const ResultsModal = ({ exam, onClose }) => {
     setSchoolName(name);
   }, [exam.id, authUser]);
 
-  // Reset to page 1 when page size changes
   useEffect(() => { setCurrentPage(1); }, [pageSize]);
 
   const loadStudents = async () => {
@@ -397,19 +490,12 @@ export const ResultsModal = ({ exam, onClose }) => {
     }
   };
 
-  // ── Pagination computed values ────────────────────────────────────────────
-  const totalPages   = Math.max(1, Math.ceil(students.length / pageSize));
+  const totalPages    = Math.max(1, Math.ceil(students.length / pageSize));
   const pagedStudents = students.slice((currentPage - 1) * pageSize, currentPage * pageSize);
 
-  const handlePageChange = (page) => {
-    setCurrentPage(Math.max(1, Math.min(page, totalPages)));
-  };
-  const handlePageSizeChange = (size) => {
-    setPageSize(size);
-    setCurrentPage(1);
-  };
+  const handlePageChange     = (page) => setCurrentPage(Math.max(1, Math.min(page, totalPages)));
+  const handlePageSizeChange = (size) => { setPageSize(size); setCurrentPage(1); };
 
-  // ── Mark entry ────────────────────────────────────────────────────────────
   const handleMark = (sid, subId, max, val) => {
     const key     = `${sid}-${subId}`;
     const num     = parseFloat(val);
@@ -421,7 +507,6 @@ export const ResultsModal = ({ exam, onClose }) => {
     }));
   };
 
-  // ── Row summary ───────────────────────────────────────────────────────────
   const rowSummary = (sid) => {
     if (!subjects?.length) return { total: null, grade: null, allFilled: false };
     const maxTotal = subjects.reduce((a, s) => a + s.max_marks, 0);
@@ -436,7 +521,6 @@ export const ResultsModal = ({ exam, onClose }) => {
     return { total, grade: getGrade(pct), allFilled };
   };
 
-  // ── Live stats (all students, not just current page) ─────────────────────
   const liveStats = () => {
     const totalCells = students.length * (subjects?.length || 0);
     let entered = 0; const pcts = [];
@@ -454,7 +538,6 @@ export const ResultsModal = ({ exam, onClose }) => {
     };
   };
 
-  // ── Save (saves ALL students, not just current page) ──────────────────────
   const handleSave = async () => {
     setSaving(true); setSaveMsg(null);
     try {
@@ -476,7 +559,6 @@ export const ResultsModal = ({ exam, onClose }) => {
     } finally { setSaving(false); }
   };
 
-  // ── Send SMS ──────────────────────────────────────────────────────────────
   const handleSendSms = async () => {
     if (!window.confirm(`Send result SMS to parents of ${students.length} student(s)?`)) return;
     setSmsSending(true); setSmsMsg(null);
@@ -500,81 +582,139 @@ export const ResultsModal = ({ exam, onClose }) => {
   };
   const tdStyle = { padding: '8px 12px', borderBottom: '1px solid #F3F4F6', verticalAlign: 'middle' };
 
-  return (
-    <div style={styles.overlay}>
-      <div style={{ ...styles.modal, maxWidth: 960, maxHeight: '93vh', display: 'flex', flexDirection: 'column' }}>
+  // Modal width — narrower on mobile so it fits the screen
+  const modalStyle = {
+    ...styles.modal,
+    maxWidth: isMobile ? '100%' : 960,
+    width: isMobile ? '100%' : undefined,
+    margin: isMobile ? 0 : undefined,
+    borderRadius: isMobile ? '16px 16px 0 0' : undefined,
+    maxHeight: isMobile ? '95vh' : '93vh',
+    display: 'flex',
+    flexDirection: 'column',
+  };
 
-        {/* Header */}
-        <div style={styles.modalHeader}>
-          <div>
-            <div style={{ fontSize: 18, fontWeight: 800, color: '#111827', letterSpacing: '-0.02em' }}>
+  const overlayStyle = {
+    ...styles.overlay,
+    alignItems: isMobile ? 'flex-end' : 'center',
+  };
+
+  return (
+    <div style={overlayStyle}>
+      <div style={modalStyle}>
+
+        {/* ── Header ── */}
+        <div style={{ ...styles.modalHeader, padding: isMobile ? '14px 16px' : undefined }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: isMobile ? 15 : 18, fontWeight: 800, color: '#111827', letterSpacing: '-0.02em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
               Results — {exam.name}
             </div>
-            <div style={{ fontSize: 12, color: '#9CA3AF', marginTop: 4, display: 'flex', alignItems: 'center', gap: 8 }}>
+            <div style={{ fontSize: 12, color: '#9CA3AF', marginTop: 4, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
               <TypeBadge type={exam.exam_type} />
               <StatusBadge status={exam.status} />
               {exam.term_name  && <span>· {exam.term_name}</span>}
               {exam.class_name && <span>· {exam.class_name}</span>}
             </div>
           </div>
-          <button onClick={onClose} style={styles.closeBtn}>×</button>
+          <button onClick={onClose} style={{ ...styles.closeBtn, flexShrink: 0 }}>×</button>
         </div>
 
-        {/* Stats bar */}
-        <div style={{ display: 'flex', gap: 12, padding: '14px 24px', borderBottom: '1px solid #F3F4F6', flexWrap: 'wrap' }}>
-          <StatCard label="Students"   value={students.length}                                gradient="linear-gradient(135deg,#2563EB,#1d4ed8)" />
-          <StatCard label="Entered"    value={`${ls.entered}/${students.length * (subjects?.length || 0)}`} gradient="linear-gradient(135deg,#7c3aed,#6d28d9)" />
-          <StatCard label="Completion" value={`${ls.completion}%`}                            gradient="linear-gradient(135deg,#059669,#047857)" />
-          <StatCard label="Class Avg"  value={ls.avg !== null ? `${ls.avg}%` : '—'}           gradient="linear-gradient(135deg,#f59e0b,#d97706)" />
-          <StatCard label="Highest"    value={ls.highest !== null ? `${ls.highest}%` : '—'}   gradient="linear-gradient(135deg,#0891b2,#0369a1)" />
+        {/* ── Stats bar ── */}
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(5, 1fr)',
+          gap: 10,
+          padding: isMobile ? '12px 16px' : '14px 24px',
+          borderBottom: '1px solid #F3F4F6',
+        }}>
+          <StatCard label="Students"   value={students.length}                                                    gradient="linear-gradient(135deg,#2563EB,#1d4ed8)" />
+          <StatCard label="Entered"    value={`${ls.entered}/${students.length * (subjects?.length || 0)}`}       gradient="linear-gradient(135deg,#7c3aed,#6d28d9)" />
+          <StatCard label="Completion" value={`${ls.completion}%`}                                                gradient="linear-gradient(135deg,#059669,#047857)" />
+          <StatCard label="Class Avg"  value={ls.avg !== null ? `${ls.avg}%` : '—'}                               gradient="linear-gradient(135deg,#f59e0b,#d97706)" />
+          {/* Highest spans full width on mobile when 5th item in 2-col grid */}
+          <StatCard label="Highest"    value={ls.highest !== null ? `${ls.highest}%` : '—'}                       gradient="linear-gradient(135deg,#0891b2,#0369a1)" />
         </div>
 
-        {/* Toolbar */}
-        <div style={{ padding: '10px 24px', borderBottom: '1px solid #F3F4F6', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+        {/* ── Toolbar ── */}
+        <div style={{
+          padding: isMobile ? '10px 16px' : '10px 24px',
+          borderBottom: '1px solid #F3F4F6',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 8,
+        }}>
           <div style={{ fontSize: 12, color: '#9CA3AF' }}>
             EE ≥80% · ME 60–79% · AE 40–59% · BE &lt;40%
           </div>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <button onClick={() => { setMarks({}); setInputErrs({}); }}
-              style={{ padding: '7px 14px', borderRadius: 6, border: '1px solid #E5E7EB', background: '#fff', cursor: 'pointer', fontSize: 13, color: '#374151', fontFamily: 'inherit' }}>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <button
+              onClick={() => { setMarks({}); setInputErrs({}); }}
+              style={{ padding: '7px 14px', borderRadius: 6, border: '1px solid #E5E7EB', background: '#fff', cursor: 'pointer', fontSize: 13, color: '#374151', fontFamily: 'inherit', flex: isMobile ? '1 1 auto' : '0 0 auto' }}
+            >
               Clear all
             </button>
-            <button onClick={() => printMarkList(exam, subjects || [], students, marks, schoolName, className)}
-              style={{ padding: '7px 14px', borderRadius: 6, border: 'none', background: '#16A34A', color: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600, fontFamily: 'inherit' }}>
+            <button
+              onClick={() => printMarkList(exam, subjects || [], students, marks, schoolName, className)}
+              style={{ padding: '7px 14px', borderRadius: 6, border: 'none', background: '#16A34A', color: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600, fontFamily: 'inherit', flex: isMobile ? '1 1 auto' : '0 0 auto' }}
+            >
               🖨 Mark List
             </button>
-            <button onClick={() => printResultSlips(exam, subjects || [], students, marks, schoolName, className)}
-              style={{ padding: '7px 14px', borderRadius: 6, border: 'none', background: '#2563EB', color: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600, fontFamily: 'inherit' }}>
+            <button
+              onClick={() => printResultSlips(exam, subjects || [], students, marks, schoolName, className)}
+              style={{ padding: '7px 14px', borderRadius: 6, border: 'none', background: '#2563EB', color: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600, fontFamily: 'inherit', flex: isMobile ? '1 1 auto' : '0 0 auto' }}
+            >
               🖨 Result Slips
             </button>
-            <button onClick={handleSendSms} disabled={smsSending}
-              style={{ padding: '7px 14px', borderRadius: 6, border: 'none', background: smsSending ? '#9CA3AF' : '#7C3AED', color: '#fff', cursor: smsSending ? 'not-allowed' : 'pointer', fontSize: 13, fontWeight: 600, fontFamily: 'inherit' }}>
-              {smsSending ? 'Sending…' : ' SMS Parents'}
+            <button
+              onClick={handleSendSms}
+              disabled={smsSending}
+              style={{ padding: '7px 14px', borderRadius: 6, border: 'none', background: smsSending ? '#9CA3AF' : '#7C3AED', color: '#fff', cursor: smsSending ? 'not-allowed' : 'pointer', fontSize: 13, fontWeight: 600, fontFamily: 'inherit', flex: isMobile ? '1 1 auto' : '0 0 auto' }}
+            >
+              {smsSending ? 'Sending…' : '✉ SMS Parents'}
             </button>
           </div>
         </div>
 
-        {/* Table */}
-        <div style={{ flex: 1, overflowY: 'auto', overflowX: 'auto' }}>
+        {/* ── Body ── */}
+        <div style={{ flex: 1, overflowY: 'auto', overflowX: isMobile ? 'hidden' : 'auto' }}>
           {fetchErr || errors.subjects ? (
-            <div style={{ padding: 40, textAlign: 'center', color: '#DC2626', fontSize: 14 }}>⚠ {fetchErr || errors.subjects}</div>
+            <div style={{ padding: 40, textAlign: 'center', color: '#DC2626', fontSize: 14 }}>
+              ⚠ {fetchErr || errors.subjects}
+            </div>
           ) : loading.subjects || studLoading ? (
             <div style={{ padding: 60, textAlign: 'center', color: '#9CA3AF' }}>
-              <div style={{ fontSize: 30, marginBottom: 10 }}></div>Loading students and subjects…
+              <div style={{ fontSize: 30, marginBottom: 10 }}>⏳</div>Loading students and subjects…
             </div>
           ) : students.length === 0 ? (
             <div style={{ padding: 60, textAlign: 'center', color: '#9CA3AF' }}>
-              <div style={{ fontSize: 38, marginBottom: 10 }}></div>
+              <div style={{ fontSize: 38, marginBottom: 10 }}>👥</div>
               <div style={{ fontWeight: 700, color: '#374151', marginBottom: 4 }}>No students found</div>
               <div style={{ fontSize: 13 }}>Make sure students are assigned to this exam's class</div>
             </div>
           ) : !subjects?.length ? (
             <div style={{ padding: 60, textAlign: 'center', color: '#9CA3AF' }}>
-              <div style={{ fontSize: 38, marginBottom: 10 }}></div>
+              <div style={{ fontSize: 38, marginBottom: 10 }}>📚</div>
               <div style={{ fontWeight: 700, color: '#374151', marginBottom: 4 }}>No subjects added</div>
               <div style={{ fontSize: 13 }}>Add subjects to this exam first using the Subjects button</div>
             </div>
+          ) : isMobile ? (
+            // ── Mobile: per-student mark cards ──
+            <div style={{ padding: '12px 16px' }}>
+              {pagedStudents.map((st, idx) => (
+                <StudentMarkCard
+                  key={st.id}
+                  student={st}
+                  globalIdx={(currentPage - 1) * pageSize + idx + 1}
+                  subjects={subjects}
+                  marks={marks}
+                  inputErrs={inputErrs}
+                  onMark={handleMark}
+                  rowSummary={rowSummary}
+                />
+              ))}
+            </div>
           ) : (
+            // ── Desktop: full table ──
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
               <thead>
                 <tr>
@@ -600,8 +740,8 @@ export const ResultsModal = ({ exam, onClose }) => {
                   const globalIdx = (currentPage - 1) * pageSize + idx + 1;
                   return (
                     <tr key={st.id}
-                      onMouseEnter={e => e.currentTarget.style.background = '#F9FAFB'}
-                      onMouseLeave={e => e.currentTarget.style.background = ''}
+                      onMouseEnter={e => (e.currentTarget.style.background = '#F9FAFB')}
+                      onMouseLeave={e => (e.currentTarget.style.background = '')}
                     >
                       <td style={{ ...tdStyle, textAlign: 'center', color: '#9CA3AF', fontSize: 12 }}>{globalIdx}</td>
                       <td style={{ ...tdStyle, fontWeight: 600, color: '#111827' }}>{st.firstName} {st.lastName}</td>
@@ -643,7 +783,7 @@ export const ResultsModal = ({ exam, onClose }) => {
           )}
         </div>
 
-        {/* ── Pagination ─────────────────────────────────────────────────────── */}
+        {/* ── Pagination ── */}
         {students.length > 0 && (
           <Pagination
             currentPage={currentPage}
@@ -652,11 +792,18 @@ export const ResultsModal = ({ exam, onClose }) => {
             pageSize={pageSize}
             onPageChange={handlePageChange}
             onPageSizeChange={handlePageSizeChange}
+            isMobile={isMobile}
           />
         )}
 
-        {/* Footer */}
-        <div style={{ ...styles.modalFooter, justifyContent: 'space-between' }}>
+        {/* ── Footer ── */}
+        <div style={{
+          ...styles.modalFooter,
+          justifyContent: 'space-between',
+          flexDirection: isMobile ? 'column' : 'row',
+          gap: 8,
+          padding: isMobile ? '12px 16px' : undefined,
+        }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
             {saveMsg && (
               <span style={{ fontSize: 13, color: saveMsg.type === 'success' ? '#16A34A' : '#DC2626', fontWeight: 500 }}>
@@ -669,9 +816,13 @@ export const ResultsModal = ({ exam, onClose }) => {
               </span>
             )}
           </div>
-          <div style={{ display: 'flex', gap: 10 }}>
-            <button onClick={onClose} style={styles.btnSecondary}>Close</button>
-            <button onClick={handleSave} disabled={saving} style={styles.btnPrimary(saving)}>
+          <div style={{ display: 'flex', gap: 10, width: isMobile ? '100%' : 'auto' }}>
+            <button onClick={onClose}
+              style={{ ...styles.btnSecondary, flex: isMobile ? 1 : 'none' }}>
+              Close
+            </button>
+            <button onClick={handleSave} disabled={saving}
+              style={{ ...styles.btnPrimary(saving), flex: isMobile ? 1 : 'none' }}>
               {saving ? 'Saving…' : 'Save Results'}
             </button>
           </div>
