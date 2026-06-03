@@ -3,7 +3,38 @@ import { useDispatch, useSelector } from 'react-redux';
 import { analyzeResults, clearAIResult } from '../ai.slice';
 import api from '../../../config/api';
 
+// Inject responsive CSS once
+const mobileStyle = `
+  @media (max-width: 640px) {
+    .ea-grid3       { grid-template-columns: 1fr !important; }
+    .ea-metrics-row { grid-template-columns: repeat(2, 1fr) !important; }
+    .ea-header      { flex-wrap: wrap; }
+    .ea-title       { font-size: 14px !important; }
+    .ea-score-row   { gap: 6px !important; }
+    .ea-score-input { width: 60px !important; }
+    .ea-btn-row     { flex-direction: column !important; }
+    .ea-btn-primary  { width: 100% !important; }
+    .ea-btn-secondary{ width: 100% !important; text-align: center; }
+    .ea-scores-header{ flex-direction: column !important; align-items: flex-start !important; }
+    .ea-wrapper     { padding: 1rem !important; }
+    .ea-metric-value{ font-size: 16px !important; }
+    .ea-subject-name{ font-size: 12px !important; }
+    .ea-at-risk-tag { font-size: 9px !important; padding: 1px 4px !important; }
+  }
+`;
+
+function injectStyle() {
+  if (typeof document !== 'undefined' && !document.getElementById('ea-mobile-style')) {
+    const tag = document.createElement('style');
+    tag.id = 'ea-mobile-style';
+    tag.textContent = mobileStyle;
+    document.head.appendChild(tag);
+  }
+}
+
 export default function ExamAnalyzer() {
+  injectStyle();
+
   const dispatch = useDispatch();
   const { result, loading, error } = useSelector(state => state.ai);
 
@@ -21,7 +52,6 @@ export default function ExamAnalyzer() {
   const [loadingMarks,    setLoadingMarks]    = useState(false);
   const [loadingStudents, setLoadingStudents] = useState(false);
 
-  // Load exams and classes on mount
   useEffect(() => {
     api.get('/exams').then(res => {
       const data = res.data?.data ?? res.data ?? [];
@@ -34,7 +64,6 @@ export default function ExamAnalyzer() {
     }).catch(() => {});
   }, []);
 
-  // Load students when class changes
   useEffect(() => {
     if (!selectedClass) return;
     setStudents([]);
@@ -54,7 +83,6 @@ export default function ExamAnalyzer() {
       .finally(() => setLoadingStudents(false));
   }, [selectedClass]);
 
-  // Auto-populate marks + fetch history
   useEffect(() => {
     if (!selectedExam || !selectedStudent) return;
     setScores([]);
@@ -63,7 +91,6 @@ export default function ExamAnalyzer() {
     dispatch(clearAIResult());
     setLoadingMarks(true);
 
-    // Fetch current exam scores
     api.get(`/exams/${selectedExam}/results/${selectedStudent}`)
       .then(res => {
         const data    = res.data?.data ?? res.data ?? [];
@@ -74,10 +101,9 @@ export default function ExamAnalyzer() {
         }));
         setScores(mapped);
 
-        // Compute metrics locally for UI
-        const values   = mapped.map(s => parseFloat(s.score)).filter(n => !isNaN(n));
+        const values = mapped.map(s => parseFloat(s.score)).filter(n => !isNaN(n));
         if (values.length) {
-          const avg      = (values.reduce((a, b) => a + b, 0) / values.length).toFixed(1);
+          const avg       = (values.reduce((a, b) => a + b, 0) / values.length).toFixed(1);
           const strongest = mapped.reduce((a, b) => parseFloat(a.score) > parseFloat(b.score) ? a : b);
           const weakest   = mapped.reduce((a, b) => parseFloat(a.score) < parseFloat(b.score) ? a : b);
           const atRisk    = mapped.filter(s => parseFloat(s.score) < 50);
@@ -88,7 +114,6 @@ export default function ExamAnalyzer() {
       .catch(() => setScores([]))
       .finally(() => setLoadingMarks(false));
 
-    // Fetch previous exam for history
     const previousExam = exams
       .filter(e => String(e.id) !== String(selectedExam))
       .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))[0];
@@ -117,8 +142,6 @@ export default function ExamAnalyzer() {
       s.score !== '' && s.score !== null && s.score !== undefined
     );
     if (!filledScores.length) return;
-
-    // Send structured data — backend builds the prompt
     dispatch(analyzeResults({
       studentName: fullName,
       scores:      filledScores,
@@ -136,14 +159,12 @@ export default function ExamAnalyzer() {
     setMetrics(null);
   };
 
-  // Risk color helper
   const riskColor = (level) => ({
     HIGH:   { bg: '#fee2e2', color: '#dc2626' },
     MEDIUM: { bg: '#fef3c7', color: '#d97706' },
     LOW:    { bg: '#dcfce7', color: '#16a34a' },
   }[level] || { bg: '#f3f4f6', color: '#6b7280' });
 
-  // Parse result sections from AI markdown
   const parseSection = (text, heading) => {
     if (!text) return null;
     const regex = new RegExp(`## ${heading}\\n([\\s\\S]*?)(?=##|$)`);
@@ -152,22 +173,21 @@ export default function ExamAnalyzer() {
   };
 
   const aiSections = result ? {
-    summary:    parseSection(result.analysis ?? result, 'Performance Summary'),
-    risk:       parseSection(result.analysis ?? result, 'Risk Assessment'),
-    breakdown:  parseSection(result.analysis ?? result, 'Subject Breakdown'),
+    summary:         parseSection(result.analysis ?? result, 'Performance Summary'),
+    risk:            parseSection(result.analysis ?? result, 'Risk Assessment'),
+    breakdown:       parseSection(result.analysis ?? result, 'Subject Breakdown'),
     recommendations: parseSection(result.analysis ?? result, 'Recommendations'),
   } : null;
 
-  // Use metrics from API response if available, else local
   const displayMetrics = result?.metrics || metrics;
 
   return (
-    <div style={s.wrapper}>
+    <div className="ea-wrapper" style={s.wrapper}>
 
       {/* Header */}
-      <div style={s.header}>
+      <div className="ea-header" style={s.header}>
         <span style={s.badge}>AI</span>
-        <h3 style={s.title}>Exam Results Analyzer</h3>
+        <h3 className="ea-title" style={s.title}>Exam Results Analyzer</h3>
         {displayMetrics && (
           <span style={{
             ...s.riskBadge,
@@ -179,8 +199,8 @@ export default function ExamAnalyzer() {
         )}
       </div>
 
-      {/* Selectors */}
-      <div style={s.grid3}>
+      {/* Selectors — stacks to 1 col on mobile */}
+      <div className="ea-grid3" style={s.grid3}>
         <div>
           <div style={s.label}>Exam</div>
           <select style={s.select} value={selectedExam}
@@ -214,29 +234,31 @@ export default function ExamAnalyzer() {
         </div>
       </div>
 
-      {/* Metrics Row — shows before AI analysis */}
+      {/* Metrics Row — 2 cols on mobile */}
       {displayMetrics && (
-        <div style={s.metricsRow}>
+        <div className="ea-metrics-row" style={s.metricsRow}>
           <div style={s.metricCard}>
             <span style={s.metricLabel}>Average</span>
-            <span style={s.metricValue}>{displayMetrics.avg ?? displayMetrics.average}%</span>
+            <span className="ea-metric-value" style={s.metricValue}>
+              {displayMetrics.avg ?? displayMetrics.average}%
+            </span>
           </div>
           <div style={s.metricCard}>
             <span style={s.metricLabel}>Strongest</span>
-            <span style={{ ...s.metricValue, fontSize: 13 }}>
+            <span className="ea-metric-value" style={{ ...s.metricValue, fontSize: 13 }}>
               {displayMetrics.strongest?.subject}
             </span>
           </div>
           <div style={s.metricCard}>
             <span style={s.metricLabel}>Needs Work</span>
-            <span style={{ ...s.metricValue, fontSize: 13, color: '#dc2626' }}>
+            <span className="ea-metric-value" style={{ ...s.metricValue, fontSize: 13, color: '#dc2626' }}>
               {displayMetrics.weakest?.subject}
             </span>
           </div>
           {history && (
             <div style={s.metricCard}>
               <span style={s.metricLabel}>vs Last Exam</span>
-              <span style={{
+              <span className="ea-metric-value" style={{
                 ...s.metricValue,
                 color: parseFloat(displayMetrics.avg ?? displayMetrics.average) > parseFloat(history.average)
                   ? '#16a34a' : '#dc2626'
@@ -256,14 +278,16 @@ export default function ExamAnalyzer() {
 
       {scores.length > 0 && !loadingMarks && (
         <div style={s.scoresBox}>
-          <div style={s.scoresHeader}>
+          <div className="ea-scores-header" style={s.scoresHeader}>
             <span style={s.label}>Subject Scores</span>
-            {fullName && <span style={s.studentChip}>{fullName}</span>}
-            {history && (
-              <span style={s.historyChip}>
-                Prev: {history.average}% — {history.examName}
-              </span>
-            )}
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+              {fullName && <span style={s.studentChip}>{fullName}</span>}
+              {history && (
+                <span style={s.historyChip}>
+                  Prev: {history.average}% — {history.examName}
+                </span>
+              )}
+            </div>
           </div>
           <div style={s.scoresGrid}>
             {scores.map((item, i) => {
@@ -271,15 +295,18 @@ export default function ExamAnalyzer() {
               const isAtRisk = score < 50;
               const isWeak   = score >= 50 && score < 65;
               return (
-                <div key={i} style={s.scoreRow}>
-                  <span style={{
+                <div key={i} className="ea-score-row" style={s.scoreRow}>
+                  <span className="ea-subject-name" style={{
                     ...s.subjectName,
                     color: isAtRisk ? '#dc2626' : isWeak ? '#d97706' : '#374151'
                   }}>
                     {item.subject}
-                    {isAtRisk && <span style={s.atRiskTag}>AT RISK</span>}
+                    {isAtRisk && (
+                      <span className="ea-at-risk-tag" style={s.atRiskTag}>AT RISK</span>
+                    )}
                   </span>
                   <input
+                    className="ea-score-input"
                     style={{
                       ...s.scoreInput,
                       borderColor: isAtRisk ? '#fca5a5' : isWeak ? '#fcd34d' : '#d1d5db'
@@ -300,27 +327,29 @@ export default function ExamAnalyzer() {
         </div>
       )}
 
-      {/* No results */}
       {!loadingMarks && selectedExam && selectedStudent && scores.length === 0 && (
         <div style={s.emptyBox}>No results found for this student in the selected exam.</div>
       )}
 
-      {/* Buttons */}
-      <div style={s.btnRow}>
+      {/* Buttons — stacks on mobile */}
+      <div className="ea-btn-row" style={s.btnRow}>
         <button
+          className="ea-btn-primary"
           style={{ ...s.btnPrimary, opacity: (!scores.length || loading) ? 0.6 : 1 }}
           onClick={handleAnalyze}
           disabled={!scores.length || loading}
         >
           {loading ? 'Analyzing...' : 'Analyze with AI'}
         </button>
-        <button style={s.btnSecondary} onClick={handleClear}>Clear</button>
+        <button className="ea-btn-secondary" style={s.btnSecondary} onClick={handleClear}>
+          Clear
+        </button>
       </div>
 
       {error && <p style={s.error}>{error}</p>}
 
-      {/* AI Report — structured sections */}
-      {(result) && (
+      {/* AI Report */}
+      {result && (
         <div style={s.reportBox}>
           <div style={s.reportHeader}>
             <span style={s.reportTitle}>
@@ -356,9 +385,8 @@ export default function ExamAnalyzer() {
             </div>
           )}
 
-          {/* Fallback if sections not parsed */}
           {!aiSections?.summary && (
-            <p style={s.sectionText}>{result?.analysis ?? result}</p>
+            <p style={{ ...s.sectionText, padding: '12px 14px' }}>{result?.analysis ?? result}</p>
           )}
         </div>
       )}
@@ -369,9 +397,9 @@ export default function ExamAnalyzer() {
 const s = {
   wrapper:      { background: '#fff', borderRadius: 12, padding: '1.5rem', border: '1px solid #e5e7eb', marginBottom: 20 },
   header:       { display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 },
-  badge:        { background: '#1D9E75', color: '#fff', fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 20 },
+  badge:        { background: '#1D9E75', color: '#fff', fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 20, whiteSpace: 'nowrap' },
   title:        { fontSize: 15, fontWeight: 600, margin: 0, color: '#111', flex: 1 },
-  riskBadge:    { fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 20 },
+  riskBadge:    { fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 20, whiteSpace: 'nowrap' },
   grid3:        { display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, marginBottom: 16 },
   label:        { fontSize: 12, color: '#6b7280', marginBottom: 4, fontWeight: 500 },
   select:       { width: '100%', padding: '8px 10px', borderRadius: 8, border: '1px solid #d1d5db', fontSize: 13, background: '#fafafa', cursor: 'pointer', boxSizing: 'border-box' },
@@ -386,10 +414,10 @@ const s = {
   historyChip:  { fontSize: 11, background: '#f3f4f6', color: '#6b7280', padding: '2px 10px', borderRadius: 20 },
   scoresGrid:   { display: 'flex', flexDirection: 'column', gap: 8 },
   scoreRow:     { display: 'flex', alignItems: 'center', gap: 8 },
-  subjectName:  { flex: 1, fontSize: 13, display: 'flex', alignItems: 'center', gap: 6 },
-  atRiskTag:    { fontSize: 10, background: '#fee2e2', color: '#dc2626', padding: '1px 6px', borderRadius: 10, fontWeight: 700 },
-  scoreInput:   { width: 70, padding: '5px 8px', borderRadius: 6, border: '1px solid #d1d5db', fontSize: 13, textAlign: 'center' },
-  outOf:        { fontSize: 12, color: '#9ca3af' },
+  subjectName:  { flex: 1, fontSize: 13, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' },
+  atRiskTag:    { fontSize: 10, background: '#fee2e2', color: '#dc2626', padding: '1px 6px', borderRadius: 10, fontWeight: 700, whiteSpace: 'nowrap' },
+  scoreInput:   { width: 70, padding: '5px 8px', borderRadius: 6, border: '1px solid #d1d5db', fontSize: 13, textAlign: 'center', flexShrink: 0 },
+  outOf:        { fontSize: 12, color: '#9ca3af', whiteSpace: 'nowrap' },
   emptyBox:     { textAlign: 'center', padding: '12px', fontSize: 13, color: '#9ca3af', background: '#f9fafb', borderRadius: 8, marginBottom: 16 },
   btnRow:       { display: 'flex', gap: 8, marginBottom: 8 },
   btnPrimary:   { flex: 1, padding: '10px', borderRadius: 8, background: '#1D9E75', color: '#fff', border: 'none', fontSize: 14, fontWeight: 600, cursor: 'pointer' },
