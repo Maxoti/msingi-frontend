@@ -619,7 +619,7 @@ export const ResultsModal = ({ exam, onClose }) => {
           <button onClick={onClose} style={{ ...styles.closeBtn, flexShrink: 0 }}>×</button>
         </div>
 
-        {/* ── Stats bar ── */}
+        {/* ── Stats bar — 2×2 + full-width 5th on mobile, single row on desktop ── */}
         <div style={{
           display: 'grid',
           gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(5, 1fr)',
@@ -627,12 +627,12 @@ export const ResultsModal = ({ exam, onClose }) => {
           padding: isMobile ? '12px 16px' : '14px 24px',
           borderBottom: '1px solid #F3F4F6',
         }}>
-          <StatCard label="Students"   value={students.length}                                                    gradient="linear-gradient(135deg,#2563EB,#1d4ed8)" />
-          <StatCard label="Entered"    value={`${ls.entered}/${students.length * (subjects?.length || 0)}`}       gradient="linear-gradient(135deg,#7c3aed,#6d28d9)" />
-          <StatCard label="Completion" value={`${ls.completion}%`}                                                gradient="linear-gradient(135deg,#059669,#047857)" />
-          <StatCard label="Class Avg"  value={ls.avg !== null ? `${ls.avg}%` : '—'}                               gradient="linear-gradient(135deg,#f59e0b,#d97706)" />
-          {/* Highest spans full width on mobile when 5th item in 2-col grid */}
-          <StatCard label="Highest"    value={ls.highest !== null ? `${ls.highest}%` : '—'}                       gradient="linear-gradient(135deg,#0891b2,#0369a1)" />
+          <StatCard label="Students"   value={students.length}                                              gradient="linear-gradient(135deg,#2563EB,#1d4ed8)" />
+          <StatCard label="Entered"    value={`${ls.entered}/${students.length * (subjects?.length || 0)}`} gradient="linear-gradient(135deg,#7c3aed,#6d28d9)" />
+          <StatCard label="Completion" value={`${ls.completion}%`}                                          gradient="linear-gradient(135deg,#059669,#047857)" />
+          <StatCard label="Class Avg"  value={ls.avg !== null ? `${ls.avg}%` : '—'}                         gradient="linear-gradient(135deg,#f59e0b,#d97706)" />
+          {/* span=2 makes Highest fill the full row on mobile (2-col grid), single cell on desktop */}
+          <StatCard label="Highest"    value={ls.highest !== null ? `${ls.highest}%` : '—'}                 gradient="linear-gradient(135deg,#0891b2,#0369a1)" span={isMobile ? 2 : 1} />
         </div>
 
         {/* ── Toolbar ── */}

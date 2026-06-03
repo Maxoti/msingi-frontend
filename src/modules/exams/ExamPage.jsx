@@ -227,7 +227,13 @@ export default function ExamPage() {
       <div style={{ padding: isMobile ? '16px' : '28px 32px', maxWidth: 1280, margin: '0 auto' }}>
 
         {/* ── Stat Cards ── */}
-        <div style={{ display: 'flex', gap: 12, marginBottom: 20, flexWrap: 'wrap' }}>
+        {/* ── Stat Cards — 2×2 grid on mobile, single row on desktop ── */}
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(4, 1fr)',
+          gap: 12,
+          marginBottom: 20,
+        }}>
           <StatCard label="Total Exams" value={total}     gradient="linear-gradient(135deg,#0f172a 0%,#1e293b 100%)" />
           <StatCard label="Published"   value={published} gradient="linear-gradient(135deg,#059669 0%,#047857 100%)" />
           <StatCard label="Draft"       value={draft}     gradient="linear-gradient(135deg,#f59e0b 0%,#d97706 100%)" />

@@ -4,25 +4,14 @@
  */
 import { TYPE_META, STATUS_META } from './examConstants';
 
-// Inject mobile styles once
-const mobileCSS = `
-  @media (max-width: 640px) {
-    .stat-cards-row { flex-direction: column !important; }
-    .stat-card      { min-width: unset !important; width: 100% !important; }
-    .exam-page-inner{ padding: 16px !important; }
-  }
-`;
-if (typeof document !== 'undefined' && !document.getElementById('primitives-mobile-style')) {
-  const tag = document.createElement('style');
-  tag.id = 'primitives-mobile-style';
-  tag.textContent = mobileCSS;
-  document.head.appendChild(tag);
-}
-
 export const TypeBadge = ({ type }) => {
   const st = TYPE_META[type] || { bg: '#F3F4F6', color: '#374151', border: '#E5E7EB', dot: '#9CA3AF' };
   return (
-    <span style={{ background: st.bg, color: st.color, border: `1px solid ${st.border}`, borderRadius: 5, padding: '2px 8px', fontSize: 11, fontWeight: 800, letterSpacing: '0.05em', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+    <span style={{
+      background: st.bg, color: st.color, border: `1px solid ${st.border}`,
+      borderRadius: 5, padding: '2px 8px', fontSize: 11, fontWeight: 800,
+      letterSpacing: '0.05em', display: 'inline-flex', alignItems: 'center', gap: 4,
+    }}>
       <span style={{ width: 5, height: 5, borderRadius: '50%', background: st.dot, display: 'inline-block' }} />
       {type}
     </span>
@@ -32,33 +21,43 @@ export const TypeBadge = ({ type }) => {
 export const StatusBadge = ({ status }) => {
   const st = STATUS_META[status] || STATUS_META.DRAFT;
   return (
-    <span style={{ background: st.bg, color: st.color, border: `1px solid ${st.border}`, borderRadius: 5, padding: '2px 10px', fontSize: 11, fontWeight: 800, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+    <span style={{
+      background: st.bg, color: st.color, border: `1px solid ${st.border}`,
+      borderRadius: 5, padding: '2px 10px', fontSize: 11, fontWeight: 800,
+      display: 'inline-flex', alignItems: 'center', gap: 4,
+    }}>
       <span style={{ width: 5, height: 5, borderRadius: '50%', background: st.dot, display: 'inline-block' }} />
       {status}
     </span>
   );
 };
 
-export const StatCard = ({ label, value, gradient, icon }) => (
-  <div
-    className="stat-card"
-    style={{
-      background:   gradient,
-      borderRadius: 12,
-      padding:      '20px 24px',
-      flex:         1,
-      minWidth:     140,
-      position:     'relative',
-      overflow:     'hidden',
-      boxShadow:    '0 4px 14px rgba(0,0,0,.12)',
-    }}>
+/**
+ * StatCard
+ *
+ * @param {string}  label     — label shown below the value
+ * @param {*}       value     — big number / string
+ * @param {string}  gradient  — CSS gradient string
+ * @param {string}  [icon]    — optional emoji
+ * @param {number}  [span]    — how many grid columns this card spans (default 1)
+ */
+export const StatCard = ({ label, value, gradient, icon, span = 1 }) => (
+  <div style={{
+    background:   gradient,
+    borderRadius: 12,
+    padding:      '18px 20px',
+    position:     'relative',
+    overflow:     'hidden',
+    boxShadow:    '0 4px 14px rgba(0,0,0,.12)',
+    gridColumn:   `span ${span}`,
+  }}>
     <div style={{
       position: 'absolute', right: -18, top: -18,
       width: 80, height: 80, borderRadius: '50%',
       background: 'rgba(255,255,255,.1)', pointerEvents: 'none',
-    }}/>
-    <div style={{ fontSize: 22, marginBottom: 8 }}>{icon}</div>
-    <div style={{ fontSize: 30, fontWeight: 800, color: '#fff', lineHeight: 1, letterSpacing: '-0.03em' }}>
+    }} />
+    {icon && <div style={{ fontSize: 22, marginBottom: 6 }}>{icon}</div>}
+    <div style={{ fontSize: 28, fontWeight: 800, color: '#fff', lineHeight: 1, letterSpacing: '-0.03em' }}>
       {value ?? '—'}
     </div>
     <div style={{ fontSize: 11, color: 'rgba(255,255,255,.75)', marginTop: 5, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase' }}>
